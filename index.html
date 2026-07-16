@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Buku Besar — Sistem Akuntansi</title>
+<title>AccountIn</title>
+<link rel="icon" type="image/png" href="bagianAtas.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -33,7 +34,7 @@
   --shadow-sm: 0 1px 2px rgba(22,33,28,0.06);
   --shadow-md: 0 4px 16px rgba(22,33,28,0.08);
   --radius: 10px;
-  --font-display: 'Fraunces', serif;
+  --font-display: 'Manrope', serif;
   --font-ui: 'Manrope', sans-serif;
   --font-mono: 'IBM Plex Mono', monospace;
 }
@@ -284,7 +285,7 @@ td.num, th.num { text-align: right; font-family: var(--font-mono); }
 <div id="app-shell">
   <aside id="sidebar">
     <div class="brand">
-      <span class="brand-mark">💰 Buku Besar</span>
+      <span class="brand-mark"><img src="AccountinLogo.png" alt="" width="200px"></span>
       <div class="brand-sub">Jurnal Umum → Buku Besar → Laporan Keuangan. Data tersimpan di peramban ini saja.</div>
     </div>
 
@@ -2106,5 +2107,9 @@ if (!Store.available) {
   showToast("⚠ Penyimpanan lokal peramban tidak tersedia (mode private/incognito?). Data tidak akan tersimpan setelah halaman ditutup.", "danger");
 }
 </script>
+<script>
+  window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+</script>
+<script defer src="/_vercel/insights/script.js"></script>
 </body>
 </html>
