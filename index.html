@@ -1,0 +1,2110 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Buku Besar — Sistem Akuntansi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<style>
+/* ============================================================================
+   DESIGN TOKENS — "Ledger" identity: green columnar-pad paper, ink navy-green
+   text, a debit/credit two-color duality carried through every badge, pill
+   and figure. Numerals always in a monospace face so columns line up.
+   ============================================================================ */
+:root {
+  --paper: #FAFAF6;
+  --paper-alt: #F0EFE8;
+  --ink: #16211C;
+  --ink-soft: #57685D;
+  --ink-faint: #8B9A8E;
+  --accent: #1F6E4A;       /* debit / brand */
+  --accent-dark: #154D33;
+  --accent-tint: #E7F2EB;
+  --credit: #A8632B;       /* credit side */
+  --credit-tint: #F5EADC;
+  --danger: #B0242B;
+  --danger-tint: #FBEAE8;
+  --line: #DEE3DA;
+  --line-strong: #C3CCC3;
+  --card: #FFFFFF;
+  --shadow-sm: 0 1px 2px rgba(22,33,28,0.06);
+  --shadow-md: 0 4px 16px rgba(22,33,28,0.08);
+  --radius: 10px;
+  --font-display: 'Fraunces', serif;
+  --font-ui: 'Manrope', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  background: var(--paper);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4 { font-family: var(--font-display); color: var(--ink); margin: 0; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+a { color: var(--accent-dark); }
+button { font-family: var(--font-ui); cursor: pointer; }
+input, select, textarea { font-family: var(--font-ui); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
+
+/* ---------- App shell ---------- */
+#app-shell { display: flex; min-height: 100vh; }
+
+/* ---------- Sidebar ---------- */
+#sidebar {
+  width: 264px; flex-shrink: 0; background: var(--paper-alt);
+  border-right: 1px solid var(--line); padding: 1.5rem 1.1rem;
+  display: flex; flex-direction: column; gap: 0.25rem;
+}
+.brand { padding: 0 0.3rem 1.1rem 0.3rem; border-bottom: 1px solid var(--line); margin-bottom: 1rem; }
+.brand-mark {
+  font-family: var(--font-display); font-weight: 600; font-size: 1.32rem;
+  color: var(--ink); display: inline-block; position: relative; padding-bottom: 6px;
+}
+.brand-mark::after {
+  content: ""; position: absolute; left: 0; right: 8%; bottom: 0; height: 3px;
+  border-bottom: 2px solid var(--ink); box-shadow: 0 3px 0 -1px var(--ink);
+}
+.brand-sub { font-size: 0.78rem; color: var(--ink-soft); margin-top: 0.6rem; line-height: 1.4; }
+
+.nav-group { margin-top: 0.9rem; }
+.nav-eyebrow {
+  text-transform: uppercase; letter-spacing: 0.09em; font-size: 0.66rem;
+  color: var(--ink-faint); font-weight: 700; margin: 0 0 0.4rem 0.5rem;
+}
+.nav-btn {
+  display: flex; align-items: center; gap: 0.6rem; width: 100%; text-align: left;
+  padding: 0.55rem 0.65rem; border-radius: 8px; border: 1px solid transparent;
+  background: transparent; font-weight: 600; font-size: 0.87rem; color: var(--ink);
+  margin-bottom: 2px; transition: background 0.12s ease, border-color 0.12s ease;
+}
+.nav-btn:hover { background: rgba(31,110,74,0.08); }
+.nav-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.nav-btn .ic { font-size: 1.05rem; width: 1.3rem; text-align: center; }
+
+.sidebar-foot { margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--line); }
+.currency-toggle { display: flex; gap: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 3px; }
+.currency-toggle button {
+  flex: 1; border: none; background: transparent; padding: 0.4rem 0.3rem; border-radius: 6px;
+  font-weight: 700; font-size: 0.78rem; color: var(--ink-soft);
+}
+.currency-toggle button.active { background: var(--accent); color: #fff; }
+.storage-note { font-size: 0.72rem; color: var(--ink-faint); margin-top: 0.7rem; line-height: 1.5; }
+.storage-note b { color: var(--ink-soft); }
+
+/* ---------- Mobile top bar ---------- */
+#mobile-bar {
+  display: none; position: sticky; top: 0; z-index: 40; background: var(--paper-alt);
+  border-bottom: 1px solid var(--line); padding: 0.7rem 1rem; align-items: center; gap: 0.7rem;
+}
+#mobile-bar .brand-mark { font-size: 1.05rem; padding-bottom: 3px; }
+#hamburger { background: var(--card); border: 1px solid var(--line); border-radius: 8px; width: 38px; height: 38px; font-size: 1.1rem; }
+#sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(22,33,28,0.35); z-index: 45; }
+
+/* ---------- Main content ---------- */
+#main { flex: 1; min-width: 0; padding: 2rem 2.4rem 4rem 2.4rem; }
+.page-head { margin-bottom: 1.4rem; }
+.page-head h1 { font-size: 1.7rem; font-weight: 600; }
+.page-cap { color: var(--ink-soft); font-size: 0.92rem; margin-top: 0.35rem; max-width: 62ch; }
+
+.container { max-width: 1080px; }
+
+/* ---------- Ledger-ruled card: the signature texture ---------- */
+.ledger-card {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 1.25rem 1.4rem; box-shadow: var(--shadow-sm); margin-bottom: 1rem;
+}
+.ledger-ruled {
+  background-image: repeating-linear-gradient(
+    to bottom, transparent, transparent 27px, var(--accent-tint) 27px, var(--accent-tint) 28px
+  );
+}
+.card-title {
+  text-transform: uppercase; letter-spacing: 0.07em; font-size: 0.7rem; font-weight: 800;
+  color: var(--accent-dark); margin-bottom: 0.7rem;
+}
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem;
+  border-radius: 8px; border: 1px solid var(--line); background: var(--card);
+  padding: 0.62rem 1.05rem; font-weight: 700; font-size: 0.86rem; color: var(--ink);
+  transition: all 0.12s ease;
+}
+.btn:hover { border-color: var(--ink-faint); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
+.btn-danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn-danger:hover { background: #8f1c22; border-color: #8f1c22; }
+.btn-ghost { background: transparent; border-color: transparent; }
+.btn-ghost:hover { background: var(--paper-alt); }
+.btn-block { width: 100%; }
+.btn-sm { padding: 0.42rem 0.75rem; font-size: 0.78rem; }
+
+/* ---------- Forms ---------- */
+label.field-label { display: block; font-size: 0.78rem; font-weight: 700; color: var(--ink-soft); margin-bottom: 0.32rem; }
+.field { margin-bottom: 0.9rem; }
+input[type=text], input[type=date], input[type=number], select, textarea {
+  width: 100%; padding: 0.58rem 0.7rem; border: 1px solid var(--line-strong); border-radius: 8px;
+  font-size: 0.9rem; background: #fff; color: var(--ink);
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+.input-row { display: flex; gap: 0.7rem; }
+.input-row > * { flex: 1; min-width: 0; }
+.hint { font-size: 0.76rem; color: var(--ink-faint); margin-top: 0.3rem; }
+
+/* ---------- Badges / duality pills ---------- */
+.badge-debit, .badge-credit {
+  display: inline-block; padding: 2px 10px; border-radius: 999px; font-weight: 700; font-size: 0.74rem;
+}
+.badge-debit { background: var(--accent-tint); color: var(--accent-dark); }
+.badge-credit { background: var(--credit-tint); color: #7A4A1E; }
+
+/* ---------- Alerts / toasts ---------- */
+.alert { padding: 0.75rem 0.95rem; border-radius: 8px; font-size: 0.86rem; margin-bottom: 0.85rem; line-height: 1.5; }
+.alert-info { background: var(--paper-alt); color: var(--ink-soft); border: 1px solid var(--line); }
+.alert-success { background: var(--accent-tint); color: var(--accent-dark); border: 1px solid #BEDECB; }
+.alert-warning { background: var(--credit-tint); color: #7A4A1E; border: 1px solid #E7C79B; }
+.alert-danger { background: var(--danger-tint); color: var(--danger); border: 1px solid #F0BFBC; }
+
+#toast-stack { position: fixed; bottom: 1.2rem; right: 1.2rem; z-index: 200; display: flex; flex-direction: column; gap: 0.5rem; }
+.toast {
+  background: var(--ink); color: #fff; padding: 0.7rem 1rem; border-radius: 8px; font-size: 0.85rem;
+  box-shadow: var(--shadow-md); max-width: 320px; animation: toast-in 0.18s ease;
+}
+.toast.toast-danger { background: var(--danger); }
+.toast.toast-success { background: var(--accent-dark); }
+@keyframes toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ---------- Tables ---------- */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); }
+table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+thead th {
+  text-align: left; background: var(--paper-alt); color: var(--ink-soft); font-size: 0.68rem;
+  text-transform: uppercase; letter-spacing: 0.06em; font-weight: 800; padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--line); white-space: nowrap;
+}
+tbody td { padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: rgba(31,110,74,0.03); }
+td.num, th.num { text-align: right; font-family: var(--font-mono); }
+.total-row td { font-weight: 800; background: var(--accent-tint); border-top: 2px solid var(--ink); }
+
+/* ---------- Metrics ---------- */
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.8rem; margin-bottom: 1rem; }
+.metric {
+  background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--accent);
+  border-radius: var(--radius); padding: 0.85rem 1rem; box-shadow: var(--shadow-sm);
+}
+.metric-label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-soft); }
+.metric-value { font-family: var(--font-mono); font-size: 1.2rem; font-weight: 600; margin-top: 0.25rem; }
+
+/* ---------- Tabs ---------- */
+.tabs { display: flex; gap: 0.3rem; border-bottom: 1px solid var(--line); margin-bottom: 1.1rem; flex-wrap: wrap; }
+.tab-btn {
+  background: none; border: none; padding: 0.65rem 0.9rem; font-weight: 700; font-size: 0.85rem;
+  color: var(--ink-soft); border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.tab-btn.active { color: var(--accent-dark); border-bottom-color: var(--accent); }
+
+/* ---------- The "adding-machine tape" balance-check panel (signature) ---------- */
+.tape {
+  background: #fff; border: 1px solid var(--line); border-radius: 4px;
+  padding: 1rem 1.1rem 1.3rem 1.1rem; box-shadow: var(--shadow-sm);
+  position: relative; font-family: var(--font-mono);
+}
+.tape::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -6px; height: 12px;
+  background-image: radial-gradient(circle, var(--paper) 5px, transparent 5.5px);
+  background-size: 16px 16px; background-position: -4px 0;
+}
+.tape-row { display: flex; justify-content: space-between; padding: 0.28rem 0; font-size: 0.86rem; }
+.tape-row.debit { color: var(--accent-dark); }
+.tape-row.credit { color: #7A4A1E; }
+.tape-row.diff { border-top: 1px dashed var(--line-strong); margin-top: 0.35rem; padding-top: 0.5rem; font-weight: 700; font-size: 0.92rem; }
+
+/* ---------- Statement lines ---------- */
+.stmt-line { display: flex; justify-content: space-between; padding: 0.32rem 0; border-bottom: 1px dashed var(--line); font-family: var(--font-mono); font-size: 0.88rem; }
+.stmt-line.indent { padding-left: 1.1rem; }
+.stmt-subtotal { display: flex; justify-content: space-between; padding: 0.4rem 0; border-top: 1px solid var(--line); font-family: var(--font-mono); font-weight: 700; font-size: 0.9rem; }
+.stmt-total { display: flex; justify-content: space-between; padding: 0.55rem 0; border-top: 2px solid var(--ink); border-bottom: 4px double var(--ink); font-family: var(--font-mono); font-weight: 800; font-size: 1.02rem; margin-top: 0.3rem; }
+.stmt-caption { font-weight: 700; font-size: 0.82rem; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.04em; margin: 0.9rem 0 0.3rem 0; }
+
+/* ---------- Journal line rows ---------- */
+.line-row { border: 1px solid var(--line); border-radius: 8px; padding: 0.85rem; margin-bottom: 0.7rem; background: #fff; }
+.line-eyebrow { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.08em; color: var(--accent-dark); text-transform: uppercase; margin-bottom: 0.4rem; }
+
+/* ---------- Empty state ---------- */
+.empty-state { text-align: center; padding: 3rem 1rem; color: var(--ink-soft); }
+.empty-state .ic { font-size: 2.2rem; margin-bottom: 0.6rem; }
+
+/* ---------- Modal ---------- */
+#modal-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(22,33,28,0.4); z-index: 150;
+  align-items: center; justify-content: center; padding: 1rem;
+}
+#modal-box { background: #fff; border-radius: 12px; padding: 1.4rem 1.5rem; max-width: 440px; width: 100%; box-shadow: var(--shadow-md); }
+#modal-box h3 { font-size: 1.05rem; margin-bottom: 0.6rem; }
+#modal-box p { font-size: 0.88rem; color: var(--ink-soft); line-height: 1.5; margin-bottom: 1rem; }
+#modal-actions { display: flex; gap: 0.6rem; justify-content: flex-end; }
+
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.chip { display: inline-block; padding: 3px 9px; border-radius: 999px; background: var(--paper-alt); font-size: 0.72rem; font-weight: 700; color: var(--ink-soft); margin: 2px 4px 2px 0; }
+
+@media (max-width: 900px) {
+  #sidebar { position: fixed; top: 0; bottom: 0; left: 0; z-index: 50; transform: translateX(-100%); transition: transform 0.2s ease; box-shadow: var(--shadow-md); }
+  #sidebar.open { transform: translateX(0); }
+  #mobile-bar { display: flex; }
+  #main { padding: 1.1rem 1rem 3rem 1rem; }
+  .two-col { grid-template-columns: 1fr; }
+  .input-row { flex-direction: column; }
+}
+</style>
+</head>
+<body>
+
+<div id="mobile-bar">
+  <button id="hamburger" aria-label="Buka menu">☰</button>
+  <span class="brand-mark">Buku Besar</span>
+</div>
+<div id="sidebar-overlay"></div>
+
+<div id="app-shell">
+  <aside id="sidebar">
+    <div class="brand">
+      <span class="brand-mark">💰 Buku Besar</span>
+      <div class="brand-sub">Jurnal Umum → Buku Besar → Laporan Keuangan. Data tersimpan di peramban ini saja.</div>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-eyebrow">Alur Kerja</div>
+      <button class="nav-btn" data-nav="input"><span class="ic">✍️</span> Input Jurnal</button>
+      <button class="nav-btn" data-nav="viewjournal"><span class="ic">📖</span> Lihat Jurnal</button>
+      <button class="nav-btn" data-nav="ledger"><span class="ic">📚</span> Buku Besar</button>
+    </div>
+    <div class="nav-group">
+      <div class="nav-eyebrow">Laporan</div>
+      <button class="nav-btn" data-nav="trialbalance"><span class="ic">⚖️</span> Neraca Saldo</button>
+      <button class="nav-btn" data-nav="statements"><span class="ic">📊</span> Laporan Keuangan</button>
+    </div>
+    <div class="nav-group">
+      <div class="nav-eyebrow">Ekspor &amp; Cadangan</div>
+      <button class="nav-btn" data-nav="export"><span class="ic">📦</span> Ekspor &amp; Backup</button>
+    </div>
+    <div class="nav-group">
+      <div class="nav-eyebrow">Pengaturan</div>
+      <button class="nav-btn" data-nav="coa"><span class="ic">🗂️</span> Kode Akun</button>
+    </div>
+
+    <div class="sidebar-foot">
+      <div class="nav-eyebrow" style="margin-left:0.1rem;">Mata Uang</div>
+      <div class="currency-toggle">
+        <button data-currency="Rp">Rupiah (Rp)</button>
+        <button data-currency="$">Dolar ($)</button>
+      </div>
+      <div class="storage-note" id="footer-stats"></div>
+      <div class="storage-note"><b>💾 Tersimpan lokal</b> — data ini hanya ada di peramban &amp; perangkat ini. Ekspor cadangan secara berkala di menu Ekspor &amp; Backup.</div>
+    </div>
+  </aside>
+
+  <main id="main">
+    <div class="container" id="page-content"><!-- rendered by JS --></div>
+  </main>
+</div>
+
+<div id="toast-stack"></div>
+
+<div id="modal-overlay">
+  <div id="modal-box">
+    <h3 id="modal-title"></h3>
+    <p id="modal-body"></p>
+    <div id="modal-actions"></div>
+  </div>
+</div>
+
+<input type="file" id="import-file-input" accept="application/json" style="display:none;">
+
+<script>
+// ===== ENGINE (tested standalone in Node before embedding — see build notes) =====
+// ============================================================================
+// ACCOUNTING ENGINE — ported 1:1 from the Python app's calculation engine.
+// Pure functions only: no DOM, no storage. Dates are ISO strings "YYYY-MM-DD"
+// which compare correctly with plain string comparison.
+// ============================================================================
+
+const ACCOUNT_TYPES = ["Asset", "Liability", "Equity", "Revenue", "Expense"];
+
+const BASE_NORMAL_BALANCE = {
+  Asset: "Debit", Liability: "Credit", Equity: "Credit",
+  Revenue: "Credit", Expense: "Debit",
+};
+
+function accountInfo(coa, code) {
+  return coa[String(code)] || { name: "Unknown Account", type: "Asset", subtype: "Current Asset", contra: false };
+}
+
+function accountName(coa, code) {
+  return accountInfo(coa, code).name;
+}
+
+function accountNormalBalance(coa, code) {
+  const info = accountInfo(coa, code);
+  let base = BASE_NORMAL_BALANCE[info.type] || "Debit";
+  if (info.subtype === "Drawing") base = "Debit";
+  if (info.contra) base = base === "Debit" ? "Credit" : "Debit";
+  return base;
+}
+
+function sortedAccountCodes(coa) {
+  return Object.keys(coa).sort((a, b) => (a.length - b.length) || (a < b ? -1 : a > b ? 1 : 0));
+}
+
+// -- date helpers ------------------------------------------------------------
+// All dates are "YYYY-MM-DD" strings. String comparison = chronological order.
+function dateLTE(a, b) { return a <= b; }
+function dateGTE(a, b) { return a >= b; }
+function dayBefore(iso) {
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function filterByDate(journal, start, end) {
+  let out = journal;
+  if (start != null) out = out.filter(r => dateGTE(r.date, start));
+  if (end != null) out = out.filter(r => dateLTE(r.date, end));
+  return out;
+}
+
+function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
+
+function accountNet(journal, code, start, end) {
+  let sub = journal.filter(r => r.post_ref === String(code));
+  sub = filterByDate(sub, start, end);
+  if (sub.length === 0) return 0.0;
+  let debit = 0, credit = 0;
+  for (const r of sub) { debit += r.debit; credit += r.credit; }
+  return debit - credit;
+}
+
+function cumulativeNetIncome(coa, journal, upTo) {
+  let revenue = 0, expense = 0;
+  for (const code of sortedAccountCodes(coa)) {
+    const info = accountInfo(coa, code);
+    if (info.type === "Revenue") revenue += -accountNet(journal, code, null, upTo);
+    else if (info.type === "Expense") expense += accountNet(journal, code, null, upTo);
+  }
+  return revenue - expense;
+}
+
+function computeTrialBalance(coa, journal, asOf) {
+  const rows = [];
+  for (const code of sortedAccountCodes(coa)) {
+    const net = accountNet(journal, code, null, asOf);
+    if (Math.abs(net) < 0.005) continue;
+    const info = accountInfo(coa, code);
+    rows.push({
+      code, account: info.name, type: info.type,
+      debit: net > 0 ? net : 0.0,
+      credit: net < 0 ? -net : 0.0,
+    });
+  }
+  const totalDebit = rows.reduce((s, r) => s + r.debit, 0);
+  const totalCredit = rows.reduce((s, r) => s + r.credit, 0);
+  return { rows, totalDebit, totalCredit };
+}
+
+function computeIncomeStatement(coa, journal, start, end) {
+  const period = filterByDate(journal, start, end);
+  const revenues = [], expenses = [];
+  for (const code of sortedAccountCodes(coa)) {
+    const info = accountInfo(coa, code);
+    const sub = period.filter(r => r.post_ref === code);
+    if (sub.length === 0) continue;
+    if (info.type === "Revenue") {
+      const amt = sub.reduce((s, r) => s + r.credit, 0) - sub.reduce((s, r) => s + r.debit, 0);
+      if (Math.abs(amt) > 0.005) revenues.push([code, info.name, amt]);
+    } else if (info.type === "Expense") {
+      const amt = sub.reduce((s, r) => s + r.debit, 0) - sub.reduce((s, r) => s + r.credit, 0);
+      if (Math.abs(amt) > 0.005) expenses.push([code, info.name, amt]);
+    }
+  }
+  const totalRevenue = revenues.reduce((s, [, , a]) => s + a, 0);
+  const totalExpenses = expenses.reduce((s, [, , a]) => s + a, 0);
+  return { revenues, totalRevenue, expenses, totalExpenses, netIncome: totalRevenue - totalExpenses };
+}
+
+function computeOwnersEquity(coa, journal, start, end, netIncomeForPeriod) {
+  const capitalCodes = sortedAccountCodes(coa).filter(c => accountInfo(coa, c).subtype === "Capital");
+  const drawingCodes = sortedAccountCodes(coa).filter(c => accountInfo(coa, c).subtype === "Drawing");
+
+  const beforeStart = dayBefore(start);
+
+  const capitalBefore = capitalCodes.reduce((s, c) => s + -accountNet(journal, c, null, beforeStart), 0);
+  const drawingsBefore = drawingCodes.reduce((s, c) => s + accountNet(journal, c, null, beforeStart), 0);
+  const netIncomeBefore = cumulativeNetIncome(coa, journal, beforeStart);
+  const beginningCapital = capitalBefore + netIncomeBefore - drawingsBefore;
+
+  const investment = capitalCodes.reduce((s, c) => s + -accountNet(journal, c, start, end), 0);
+  const drawings = drawingCodes.reduce((s, c) => s + accountNet(journal, c, start, end), 0);
+
+  const endingCapital = beginningCapital + investment + netIncomeForPeriod - drawings;
+
+  return {
+    capitalCodes, drawingCodes, beginningCapital, investment,
+    netIncome: netIncomeForPeriod, drawings, endingCapital,
+  };
+}
+
+function computeBalanceSheet(coa, journal, asOf, endingCapital) {
+  const assetGroups = { "Current Asset": [], "Fixed Asset": [], "Other Asset": [] };
+  const liabilityGroups = { "Current Liability": [], "Long-Term Liability": [] };
+
+  for (const code of sortedAccountCodes(coa)) {
+    const info = accountInfo(coa, code);
+    if (info.type !== "Asset" && info.type !== "Liability") continue;
+    const net = accountNet(journal, code, null, asOf);
+    if (Math.abs(net) < 0.005) continue;
+    if (info.type === "Asset") {
+      if (!assetGroups[info.subtype]) assetGroups[info.subtype] = [];
+      assetGroups[info.subtype].push([code, info.name, net, !!info.contra]);
+    } else {
+      if (!liabilityGroups[info.subtype]) liabilityGroups[info.subtype] = [];
+      liabilityGroups[info.subtype].push([code, info.name, -net]);
+    }
+  }
+
+  let totalAssets = 0;
+  for (const items of Object.values(assetGroups)) for (const [, , a] of items) totalAssets += a;
+  let totalLiabilities = 0;
+  for (const items of Object.values(liabilityGroups)) for (const [, , a] of items) totalLiabilities += a;
+  const totalLiabEquity = totalLiabilities + endingCapital;
+
+  return {
+    assetGroups, liabilityGroups, totalAssets, totalLiabilities,
+    equity: endingCapital, totalLiabEquity,
+    isBalanced: Math.abs(totalAssets - totalLiabEquity) < 0.01,
+  };
+}
+
+function computeAccountLedgerRows(coa, journal, code) {
+  const acctTxns = journal
+    .filter(r => r.post_ref === code)
+    .slice()
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)
+      || (a.transaction_id < b.transaction_id ? -1 : a.transaction_id > b.transaction_id ? 1 : 0)
+      || (a.credit - b.credit));
+
+  if (acctTxns.length === 0) return { rows: [], endingBalance: 0.0 };
+
+  const normalDebit = accountNormalBalance(coa, code) === "Debit";
+  let running = 0.0;
+  const rows = [];
+  for (const r of acctTxns) {
+    running += normalDebit ? (r.debit - r.credit) : (r.credit - r.debit);
+    const others = journal
+      .filter(x => x.transaction_id === r.transaction_id && x.post_ref !== code)
+      .map(x => x.account_title);
+    const uniqueOthers = [...new Set(others)];
+    const description = uniqueOthers.length ? uniqueOthers.join(" / ") : (r.explanation || "");
+    rows.push({ date: r.date, description, debit: r.debit, credit: r.credit, balance: running });
+  }
+  return { rows, endingBalance: rows[rows.length - 1].balance };
+}
+
+function accountsWithActivity(coa, journal) {
+  if (journal.length === 0) return [];
+  const posted = new Set(journal.map(r => r.post_ref));
+  return sortedAccountCodes(coa).filter(c => posted.has(c));
+}
+
+function validateTransaction(entries) {
+  const totalDebit = entries.reduce((s, e) => s + e.debit, 0);
+  const totalCredit = entries.reduce((s, e) => s + e.credit, 0);
+  const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01;
+  const hasAmount = (totalDebit + totalCredit) > 0;
+
+  const warnings = [];
+  entries.forEach((e, i) => {
+    if (e.debit > 0 && e.credit > 0) warnings.push(`Line ${i + 1}: has both a Debit and a Credit amount — enter only one per line.`);
+  });
+
+  if (!hasAmount) return { isValid: false, totalDebit, totalCredit, message: "Enter at least one Debit and one Credit amount.", warnings };
+  if (warnings.length) return { isValid: false, totalDebit, totalCredit, message: "Fix the flagged line(s) before posting.", warnings };
+  if (isBalanced) return { isValid: true, totalDebit, totalCredit, message: "Balanced — ready to post.", warnings };
+  return { isValid: false, totalDebit, totalCredit, message: "Debits and Credits don't match yet.", warnings };
+}
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+const SUBTYPES_BY_TYPE = {
+  Asset: ["Current Asset", "Fixed Asset", "Other Asset"],
+  Liability: ["Current Liability", "Long-Term Liability"],
+  Equity: ["Capital", "Drawing"],
+  Revenue: ["Operating Revenue", "Other Revenue"],
+  Expense: ["Operating Expense", "Other Expense"],
+};
+const TYPE_ICON = { Asset: "🏦", Liability: "💳", Equity: "👤", Revenue: "💰", Expense: "🧾" };
+
+const DEFAULT_COA = {
+  "101": { name: "Kas", type: "Asset", subtype: "Current Asset", contra: false },
+  "102": { name: "Piutang Usaha", type: "Asset", subtype: "Current Asset", contra: false },
+  "103": { name: "Persediaan", type: "Asset", subtype: "Current Asset", contra: false },
+  "104": { name: "Beban Dibayar Dimuka", type: "Asset", subtype: "Current Asset", contra: false },
+  "105": { name: "Perlengkapan Kantor", type: "Asset", subtype: "Current Asset", contra: false },
+  "150": { name: "Peralatan", type: "Asset", subtype: "Fixed Asset", contra: false },
+  "151": { name: "Akumulasi Penyusutan - Peralatan", type: "Asset", subtype: "Fixed Asset", contra: true },
+  "201": { name: "Utang Usaha", type: "Liability", subtype: "Current Liability", contra: false },
+  "202": { name: "Utang Wesel", type: "Liability", subtype: "Current Liability", contra: false },
+  "203": { name: "Utang Gaji", type: "Liability", subtype: "Current Liability", contra: false },
+  "204": { name: "Utang Bunga", type: "Liability", subtype: "Current Liability", contra: false },
+  "301": { name: "Modal Pemilik", type: "Equity", subtype: "Capital", contra: false },
+  "302": { name: "Prive Pemilik", type: "Equity", subtype: "Drawing", contra: false },
+  "401": { name: "Pendapatan Jasa", type: "Revenue", subtype: "Operating Revenue", contra: false },
+  "402": { name: "Pendapatan Penjualan", type: "Revenue", subtype: "Operating Revenue", contra: false },
+  "501": { name: "Beban Sewa", type: "Expense", subtype: "Operating Expense", contra: false },
+  "502": { name: "Beban Gaji", type: "Expense", subtype: "Operating Expense", contra: false },
+  "503": { name: "Beban Utilitas", type: "Expense", subtype: "Operating Expense", contra: false },
+  "504": { name: "Beban Penyusutan", type: "Expense", subtype: "Operating Expense", contra: false },
+  "505": { name: "Beban Perlengkapan", type: "Expense", subtype: "Operating Expense", contra: false },
+  "506": { name: "Beban Bunga", type: "Expense", subtype: "Other Expense", contra: false },
+};
+
+const CURRENCY_META = { Rp: { symbol: "Rp", decimals: 0 }, "$": { symbol: "$", decimals: 2 } };
+
+const STORAGE_KEYS = {
+  coa: "accsys_chart_of_accounts_v1",
+  journal: "accsys_journal_v1",
+  settings: "accsys_settings_v1",
+};
+
+// ============================================================================
+// STORAGE LAYER — everything lives in this browser's localStorage. No server,
+// no account, no sync between devices. See Store.probe() for the health check
+// shown to the user if storage isn't available (e.g. private-mode Safari).
+// ============================================================================
+const Store = {
+  available: true,
+  probe() {
+    try {
+      const k = "__accsys_probe__";
+      localStorage.setItem(k, "1");
+      localStorage.removeItem(k);
+      this.available = true;
+    } catch (e) {
+      this.available = false;
+    }
+    return this.available;
+  },
+  load(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw == null) return fallback;
+      return JSON.parse(raw);
+    } catch (e) {
+      return fallback;
+    }
+  },
+  save(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch (e) {
+      console.error("Storage write failed", e);
+      return false;
+    }
+  },
+};
+
+// ============================================================================
+// APP STATE
+// ============================================================================
+window.state = {
+  coa: null,
+  journal: null,      // array of {date, transaction_id, line_id, account_title, post_ref, explanation, debit, credit}
+  settings: null,
+  nav: "input",
+  entryLines: 2,
+  entryDraft: null,    // per-line draft values, reset on post/clear
+  confirmDeleteTxn: null,
+  confirmClearAll: false,
+  confirmRemoveAcct: null,
+  editingAcct: null,
+  coaTab: "list",      // list | add | edit | remove
+  vjFilters: { start: null, end: null, accounts: [] },
+  fsRange: { start: null, end: null },
+  fsTab: "income",
+  tbAsOf: null,
+};
+
+function loadState() {
+  Store.probe();
+  state.coa = Store.load(STORAGE_KEYS.coa, null);
+  if (!state.coa || Object.keys(state.coa).length === 0) {
+    state.coa = JSON.parse(JSON.stringify(DEFAULT_COA));
+    Store.save(STORAGE_KEYS.coa, state.coa);
+  }
+  state.journal = Store.load(STORAGE_KEYS.journal, []);
+  state.settings = Store.load(STORAGE_KEYS.settings, { currency: "Rp" });
+}
+
+function warnIfSaveFailed(success) {
+  if (!success) {
+    showToast("⚠ Gagal menyimpan ke penyimpanan lokal (mungkin penuh). Segera unduh cadangan sebelum menutup halaman ini!", "danger");
+  }
+  return success;
+}
+function persistCOA() { return warnIfSaveFailed(Store.save(STORAGE_KEYS.coa, state.coa)); }
+function persistJournal() { return warnIfSaveFailed(Store.save(STORAGE_KEYS.journal, state.journal)); }
+function persistSettings() { return warnIfSaveFailed(Store.save(STORAGE_KEYS.settings, state.settings)); }
+
+
+// ============================================================================
+// FORMATTING HELPERS
+// ============================================================================
+function currency() { return state.settings.currency || "Rp"; }
+function currencySymbol(c) { return CURRENCY_META[c || currency()].symbol; }
+function currencyLabel(base, c) { return `${base} (${currencySymbol(c || currency())})`; }
+
+function fmtMoney(value, opts = {}) {
+  const { dashOnZero = false, c = null } = opts;
+  let v = value;
+  if (v == null || Number.isNaN(v)) v = 0;
+  v = Number(v);
+  const cur = c || currency();
+  if (dashOnZero && Math.abs(v) < 0.005) return "–";
+  const negative = v < -0.005;
+  const absVal = Math.abs(v);
+  let s;
+  if (cur === "Rp") {
+    s = Math.round(absVal).toLocaleString("id-ID");
+  } else {
+    s = absVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  s = `${currencySymbol(cur)} ${s}`;
+  return negative ? `(${s})` : s;
+}
+
+const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
+const MONTHS_LONG = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+
+function isoToParts(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  return { y, m, d };
+}
+function fmtDate(iso, style = "short") {
+  if (!iso) return "";
+  const { y, m, d } = isoToParts(iso);
+  const dd = String(d).padStart(2, "0");
+  if (style === "short") return `${dd}-${MONTHS_SHORT[m - 1]}-${y}`;
+  if (style === "long") return `${dd} ${MONTHS_LONG[m - 1]} ${y}`;
+  return iso;
+}
+function todayISO() {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+function uid(n = 8) {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let out = "";
+  const arr = new Uint8Array(n);
+  crypto.getRandomValues(arr);
+  for (let i = 0; i < n; i++) out += chars[arr[i] % chars.length];
+  return out;
+}
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function accountOptions(codes) {
+  const list = codes || E_sortedAccountCodes();
+  return list.map(c => {
+    const info = accountInfo(state.coa, c);
+    return { code: c, label: `${TYPE_ICON[info.type] || ""} ${c} — ${info.name}` };
+  });
+}
+function E_sortedAccountCodes() { return sortedAccountCodes(state.coa); }
+
+// ============================================================================
+// TOAST / MODAL
+// ============================================================================
+function showToast(message, type = "info") {
+  const stack = document.getElementById("toast-stack");
+  const el = document.createElement("div");
+  el.className = `toast ${type === "danger" ? "toast-danger" : type === "success" ? "toast-success" : ""}`;
+  el.textContent = message;
+  stack.appendChild(el);
+  setTimeout(() => { el.style.transition = "opacity 0.25s ease"; el.style.opacity = "0"; setTimeout(() => el.remove(), 260); }, 3200);
+}
+
+function openModal({ title, body, actions }) {
+  document.getElementById("modal-title").textContent = title;
+  document.getElementById("modal-body").textContent = body;
+  const actionsEl = document.getElementById("modal-actions");
+  actionsEl.innerHTML = "";
+  actions.forEach(a => {
+    const btn = document.createElement("button");
+    btn.className = `btn ${a.variant === "primary" ? "btn-primary" : a.variant === "danger" ? "btn-danger" : ""}`;
+    btn.textContent = a.label;
+    btn.onclick = () => { closeModal(); if (a.onClick) a.onClick(); };
+    actionsEl.appendChild(btn);
+  });
+  document.getElementById("modal-overlay").style.display = "flex";
+}
+function closeModal() { document.getElementById("modal-overlay").style.display = "none"; }
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("modal-overlay").addEventListener("click", (e) => {
+    if (e.target.id === "modal-overlay") closeModal();
+  });
+});
+
+
+// ============================================================================
+// ROUTER / SHELL
+// ============================================================================
+const NAV_TITLES = {
+  input: "✍️ Input Jurnal", viewjournal: "📖 Lihat Jurnal", ledger: "📚 Buku Besar",
+  trialbalance: "⚖️ Neraca Saldo", statements: "📊 Laporan Keuangan",
+  export: "📦 Ekspor & Backup", coa: "🗂️ Kode Akun",
+};
+
+function navigate(page) {
+  state.nav = page;
+  document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.nav === page));
+  closeSidebarMobile();
+  renderPage();
+  window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
+}
+
+function renderPage() {
+  const c = document.getElementById("page-content");
+  switch (state.nav) {
+    case "input": c.innerHTML = tplInputJournal(); afterRenderInputJournal(); break;
+    case "viewjournal": c.innerHTML = tplViewJournal(); afterRenderViewJournal(); break;
+    case "ledger": c.innerHTML = tplLedger(); break;
+    case "trialbalance": c.innerHTML = tplTrialBalance(); afterRenderTrialBalance(); break;
+    case "statements": c.innerHTML = tplStatements(); afterRenderStatements(); break;
+    case "export": c.innerHTML = tplExport(); break;
+    case "coa": c.innerHTML = tplCOA(); afterRenderCOA(); break;
+    default: c.innerHTML = tplInputJournal(); afterRenderInputJournal();
+  }
+  updateFooterStats();
+  updateCurrencyToggleUI();
+}
+
+function updateFooterStats() {
+  const nTxn = new Set(state.journal.map(r => r.transaction_id)).size;
+  const nAccts = Object.keys(state.coa).length;
+  document.getElementById("footer-stats").innerHTML = `📄 ${nTxn} transaksi · 🗂️ ${nAccts} akun`;
+}
+function updateCurrencyToggleUI() {
+  document.querySelectorAll(".currency-toggle button").forEach(b => {
+    b.classList.toggle("active", b.dataset.currency === currency());
+  });
+}
+
+function openSidebarMobile() { document.getElementById("sidebar").classList.add("open"); document.getElementById("sidebar-overlay").style.display = "block"; }
+function closeSidebarMobile() { document.getElementById("sidebar").classList.remove("open"); document.getElementById("sidebar-overlay").style.display = "none"; }
+
+
+// ============================================================================
+// PAGE — Input Jurnal (Input Journal)
+// ============================================================================
+function initEntryDraft(nLines) {
+  const codes = E_sortedAccountCodes();
+  const firstCode = codes.length ? codes[0] : null;
+  const n = nLines || state.entryLines || 2;
+  state.entryLines = n;
+  state.entryDraft = Array.from({ length: n }, () => ({ account: firstCode, debit: 0, credit: 0, explanation: "" }));
+  state.entryDate = state.entryDate || todayISO();
+}
+
+function tplInputJournal() {
+  if (Object.keys(state.coa).length === 0) {
+    return `<div class="page-head"><h1>✍️ Input Jurnal</h1></div>
+      <div class="alert alert-warning">Belum ada akun. Tambahkan akun terlebih dahulu di menu <b>Kode Akun</b>.</div>`;
+  }
+  if (!state.entryDraft || state.entryDraft.length !== state.entryLines) initEntryDraft(state.entryLines);
+  const opts = accountOptions();
+
+  const lineRows = state.entryDraft.map((e, i) => `
+    <div class="line-row">
+      <div class="line-eyebrow">Baris ${i + 1}</div>
+      <div class="input-row" style="margin-bottom:0.6rem;">
+        <div style="flex:2.2;">
+          ${i === 0 ? '<label class="field-label">Akun</label>' : ''}
+          <select data-action="line-account" data-idx="${i}">
+            ${opts.map(o => `<option value="${o.code}" ${o.code === e.account ? "selected" : ""}>${escapeHtml(o.label)}</option>`).join("")}
+          </select>
+        </div>
+        <div>
+          ${i === 0 ? `<label class="field-label">${currencyLabel("Debit")}</label>` : ''}
+          <input type="number" min="0" step="any" inputmode="decimal" data-action="line-debit" data-idx="${i}" value="${e.debit || ""}" placeholder="0">
+        </div>
+        <div>
+          ${i === 0 ? `<label class="field-label">${currencyLabel("Kredit")}</label>` : ''}
+          <input type="number" min="0" step="any" inputmode="decimal" data-action="line-credit" data-idx="${i}" value="${e.credit || ""}" placeholder="0">
+        </div>
+      </div>
+      <input type="text" data-action="line-expl" data-idx="${i}" value="${escapeHtml(e.explanation)}" placeholder="Keterangan (opsional)">
+    </div>
+  `).join("");
+
+  const refByType = ["Asset","Liability","Equity","Revenue","Expense"].map(t => {
+    const codes = E_sortedAccountCodes().filter(c => accountInfo(state.coa, c).type === t);
+    if (!codes.length) return "";
+    return `<div style="margin-bottom:0.5rem;"><b>${TYPE_ICON[t]} ${t}</b><br>
+      <span class="hint">${codes.map(c => `${c} — ${escapeHtml(accountName(state.coa, c))}`).join(" · ")}</span></div>`;
+  }).join("");
+
+  return `
+    <div class="page-head">
+      <h1>✍️ Input Jurnal</h1>
+      <div class="page-cap">Catat transaksi berimbang (total Debit harus sama dengan total Kredit).</div>
+    </div>
+    <div class="two-col">
+      <div>
+        <div class="input-row" style="margin-bottom:1rem;">
+          <div class="field" style="margin-bottom:0;">
+            <label class="field-label">Tanggal Transaksi</label>
+            <input type="date" id="entry-date" value="${state.entryDate}">
+          </div>
+          <div class="field" style="margin-bottom:0; flex:0 0 160px;">
+            <label class="field-label">Jumlah Baris</label>
+            <select id="entry-numlines">
+              ${Array.from({length:11},(_,k)=>k+2).map(n => `<option value="${n}" ${n===state.entryLines?"selected":""}>${n}</option>`).join("")}
+            </select>
+          </div>
+        </div>
+        <h4 style="font-size:0.95rem; margin-bottom:0.7rem;">Baris Transaksi</h4>
+        <div id="entry-lines">${lineRows}</div>
+      </div>
+      <div>
+        <h4 style="font-size:0.95rem; margin-bottom:0.7rem;">Cek Keseimbangan</h4>
+        <div id="tape-panel"></div>
+        <div style="margin-top:0.9rem; display:flex; gap:0.6rem;">
+          <button class="btn btn-primary btn-block" id="btn-post" data-action="post-txn">✅ Posting Transaksi</button>
+        </div>
+        <button class="btn btn-block" style="margin-top:0.5rem;" data-action="clear-form">🧹 Bersihkan Form</button>
+      </div>
+    </div>
+    <div class="ledger-card" style="margin-top:1.3rem;">
+      <div class="card-title">📎 Referensi Kode Akun</div>
+      ${refByType}
+    </div>
+  `;
+}
+
+function currentEntries() {
+  return state.entryDraft.map(e => ({ debit: Number(e.debit) || 0, credit: Number(e.credit) || 0 }));
+}
+
+function updateTape() {
+  const entries = currentEntries();
+  const v = validateTransaction(entries);
+  const diff = v.totalDebit - v.totalCredit;
+  const panel = document.getElementById("tape-panel");
+  if (!panel) return;
+  let msgHtml = "";
+  v.warnings.forEach(w => msgHtml += `<div class="alert alert-warning" style="margin-top:0.6rem;">${escapeHtml(w)}</div>`);
+  if (v.isValid) msgHtml += `<div class="alert alert-success" style="margin-top:0.6rem;">${escapeHtml(v.message)}</div>`;
+  else if (!v.warnings.length) msgHtml += `<div class="alert alert-info" style="margin-top:0.6rem;">${escapeHtml(v.message)}</div>`;
+
+  panel.innerHTML = `
+    <div class="tape">
+      <div class="tape-row debit"><span>Total Debit</span><span>${fmtMoney(v.totalDebit)}</span></div>
+      <div class="tape-row credit"><span>Total Kredit</span><span>${fmtMoney(v.totalCredit)}</span></div>
+      <div class="tape-row diff"><span>Selisih</span><span>${fmtMoney(diff)}</span></div>
+    </div>
+    ${msgHtml}
+  `;
+  const btn = document.getElementById("btn-post");
+  if (btn) btn.disabled = !v.isValid;
+}
+
+function afterRenderInputJournal() {
+  const dateEl = document.getElementById("entry-date");
+  if (dateEl) dateEl.addEventListener("change", (e) => { state.entryDate = e.target.value; });
+  const numEl = document.getElementById("entry-numlines");
+  if (numEl) numEl.addEventListener("change", (e) => {
+    const n = Number(e.target.value);
+    const codes = E_sortedAccountCodes();
+    const firstCode = codes.length ? codes[0] : null;
+    const old = state.entryDraft;
+    state.entryLines = n;
+    state.entryDraft = Array.from({ length: n }, (_, i) => old[i] || { account: firstCode, debit: 0, credit: 0, explanation: "" });
+    renderPage();
+  });
+  updateTape();
+}
+
+
+// ============================================================================
+// PAGE — Lihat Jurnal (View Journal)
+// ============================================================================
+function journalGroups(rows) {
+  const byTxn = {};
+  const order = [];
+  rows.forEach(r => {
+    if (!byTxn[r.transaction_id]) { byTxn[r.transaction_id] = []; order.push(r.transaction_id); }
+    byTxn[r.transaction_id].push(r);
+  });
+  const groups = order.map(tid => {
+    const lines = byTxn[tid].slice().sort((a, b) => a.credit - b.credit);
+    return { tid, date: lines[0].date, lines };
+  });
+  groups.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  return groups;
+}
+
+function getFilteredJournal() {
+  let rows = state.journal.slice();
+  const f = state.vjFilters;
+  if (f.start) rows = rows.filter(r => r.date >= f.start);
+  if (f.end) rows = rows.filter(r => r.date <= f.end);
+  if (f.accounts && f.accounts.length) rows = rows.filter(r => f.accounts.includes(r.post_ref));
+  rows.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || (a.transaction_id < b.transaction_id ? -1 : a.transaction_id > b.transaction_id ? 1 : 0) || (a.credit - b.credit));
+  return rows;
+}
+
+function tplViewJournal() {
+  if (state.journal.length === 0) {
+    return `<div class="page-head"><h1>📖 Lihat Jurnal</h1></div><div class="alert alert-info">Belum ada transaksi tercatat.</div>`;
+  }
+  if (state.vjFilters.start == null) {
+    const dates = state.journal.map(r => r.date);
+    state.vjFilters.start = dates.reduce((a, b) => a < b ? a : b);
+    state.vjFilters.end = dates.reduce((a, b) => a > b ? a : b);
+  }
+  const filtered = getFilteredJournal();
+  const nTxn = new Set(filtered.map(r => r.transaction_id)).size;
+  const opts = accountOptions();
+
+  const rowsHtml = filtered.map(r => `
+    <tr data-line-id="${r.line_id}">
+      <td class="mono" data-cell="date">${fmtDate(r.date)}</td>
+      <td>${escapeHtml(r.account_title)}</td>
+      <td class="mono">${escapeHtml(r.post_ref)}</td>
+      <td data-cell="expl">${escapeHtml(r.explanation)}</td>
+      <td class="num mono">${r.debit ? fmtMoney(r.debit) : "–"}</td>
+      <td class="num mono">${r.credit ? fmtMoney(r.credit) : "–"}</td>
+      <td class="mono chip">${escapeHtml(r.transaction_id)}</td>
+      <td><button class="btn btn-sm btn-ghost" data-action="edit-line-row" data-line-id="${r.line_id}">✏️</button></td>
+    </tr>
+  `).join("");
+
+  const txnOptions = journalGroups(state.journal).slice().reverse().map(g => {
+    const accts = [...new Set(g.lines.map(l => l.account_title))].slice(0, 3).join(" / ");
+    const amt = g.lines.reduce((s, l) => s + l.debit, 0);
+    return { tid: g.tid, label: `${fmtDate(g.date)} · ${accts} · ${fmtMoney(amt)}` };
+  });
+
+  return `
+    <div class="page-head"><h1>📖 Lihat Jurnal</h1></div>
+
+    <div class="ledger-card">
+      <div class="card-title">🔎 Filter</div>
+      <div class="two-col">
+        <div class="input-row">
+          <div><label class="field-label">Dari Tanggal</label><input type="date" id="vj-start" value="${state.vjFilters.start}"></div>
+          <div><label class="field-label">Sampai Tanggal</label><input type="date" id="vj-end" value="${state.vjFilters.end}"></div>
+        </div>
+        <div>
+          <label class="field-label">Filter Akun (opsional)</label>
+          <select id="vj-accounts" multiple size="3">
+            ${opts.map(o => `<option value="${o.code}" ${state.vjFilters.accounts.includes(o.code) ? "selected" : ""}>${escapeHtml(o.label)}</option>`).join("")}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <p><b>${nTxn}</b> transaksi, <b>${filtered.length}</b> baris</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Tanggal</th><th>Akun</th><th>Ref</th><th>Keterangan</th>
+          <th class="num">${currencyLabel("Debit")}</th><th class="num">${currencyLabel("Kredit")}</th><th>No. Transaksi</th><th></th>
+        </tr></thead>
+        <tbody id="vj-tbody">${rowsHtml}</tbody>
+      </table>
+    </div>
+    <p class="hint">Hanya <b>Tanggal</b> dan <b>Keterangan</b> yang bisa diubah di sini, untuk menjaga keseimbangan jurnal. Untuk mengubah nominal, hapus transaksinya lalu catat ulang.</p>
+
+    <div style="margin: 1.2rem 0;">
+      <button class="btn" data-action="export-journal-xlsx">📥 Ekspor ke Excel</button>
+    </div>
+
+    <div class="ledger-card">
+      <div class="card-title">🗑️ Hapus Transaksi</div>
+      <p class="hint" style="margin-top:-0.3rem;">Menghapus kedua sisi transaksi sekaligus, agar buku besar tetap seimbang.</p>
+      <div class="input-row">
+        <select id="vj-del-select" style="flex:3;">
+          ${txnOptions.map(o => `<option value="${o.tid}">${escapeHtml(o.label)}</option>`).join("")}
+        </select>
+        <button class="btn btn-danger" style="flex:0 0 auto;" data-action="delete-txn-btn">🗑️ Hapus Transaksi Terpilih</button>
+      </div>
+    </div>
+
+    <div style="margin-top:1rem;">
+      <button class="btn btn-danger" data-action="clear-all-btn">🧨 Hapus Semua Transaksi</button>
+    </div>
+  `;
+}
+
+function afterRenderViewJournal() {
+  const s = document.getElementById("vj-start"), en = document.getElementById("vj-end"), acc = document.getElementById("vj-accounts");
+  if (s) s.addEventListener("change", e => { state.vjFilters.start = e.target.value; renderPage(); });
+  if (en) en.addEventListener("change", e => { state.vjFilters.end = e.target.value; renderPage(); });
+  if (acc) acc.addEventListener("change", e => {
+    state.vjFilters.accounts = Array.from(e.target.selectedOptions).map(o => o.value);
+    renderPage();
+  });
+}
+
+function editLineRow(lineId) {
+  const tr = document.querySelector(`tr[data-line-id="${lineId}"]`);
+  if (!tr) return;
+  const row = state.journal.find(r => r.line_id === lineId);
+  if (!row) return;
+  const dateTd = tr.querySelector('[data-cell="date"]');
+  const explTd = tr.querySelector('[data-cell="expl"]');
+  dateTd.innerHTML = `<input type="date" value="${row.date}" style="width:140px;" id="edit-date-${lineId}">`;
+  explTd.innerHTML = `<input type="text" value="${escapeHtml(row.explanation)}" id="edit-expl-${lineId}">`;
+  const btnTd = tr.querySelector('[data-action="edit-line-row"]').parentElement;
+  btnTd.innerHTML = `<button class="btn btn-sm btn-primary" data-action="save-line-row" data-line-id="${lineId}">💾</button>`;
+}
+function saveLineRow(lineId) {
+  const row = state.journal.find(r => r.line_id === lineId);
+  if (!row) return;
+  const d = document.getElementById(`edit-date-${lineId}`).value;
+  const ex = document.getElementById(`edit-expl-${lineId}`).value;
+  if (d) row.date = d;
+  row.explanation = ex;
+  persistJournal();
+  showToast("Perubahan disimpan.", "success");
+  renderPage();
+}
+
+function deleteTransaction(tid) {
+  state.journal = state.journal.filter(r => r.transaction_id !== tid);
+  persistJournal();
+  showToast("Transaksi dihapus.", "success");
+  renderPage();
+}
+function clearAllJournal() {
+  state.journal = [];
+  persistJournal();
+  showToast("Semua transaksi telah dihapus.", "success");
+  renderPage();
+}
+
+
+// ============================================================================
+// PAGE — Buku Besar (View Ledger)
+// ============================================================================
+function tplLedger() {
+  if (state.journal.length === 0) {
+    return `<div class="page-head"><h1>📚 Buku Besar</h1></div><div class="alert alert-info">Belum ada transaksi tercatat.</div>`;
+  }
+  const codes = accountsWithActivity(state.coa, state.journal);
+  if (codes.length === 0) {
+    return `<div class="page-head"><h1>📚 Buku Besar</h1></div><div class="alert alert-info">Belum ada posting.</div>`;
+  }
+
+  const blocks = codes.map(code => {
+    const info = accountInfo(state.coa, code);
+    const { rows, endingBalance } = computeAccountLedgerRows(state.coa, state.journal, code);
+    const rowsHtml = rows.map(r => `
+      <tr>
+        <td class="mono">${fmtDate(r.date)}</td>
+        <td>${escapeHtml(r.description)}</td>
+        <td class="num mono">${r.debit ? fmtMoney(r.debit) : "–"}</td>
+        <td class="num mono">${r.credit ? fmtMoney(r.credit) : "–"}</td>
+        <td class="num mono">${fmtMoney(r.balance)}</td>
+      </tr>`).join("");
+    return `
+      <div class="ledger-card">
+        <h3 style="font-size:1.05rem; margin-bottom:0.6rem;">${TYPE_ICON[info.type] || ""} ${code} — ${escapeHtml(info.name)}</h3>
+        <div class="metric-grid" style="margin-bottom:0.9rem;">
+          <div class="metric"><div class="metric-label">Jenis</div><div class="metric-value" style="font-size:0.95rem;">${info.type} · ${info.subtype}</div></div>
+          <div class="metric"><div class="metric-label">Saldo Normal</div><div class="metric-value" style="font-size:0.95rem;">${accountNormalBalance(state.coa, code) === "Debit" ? "Debit" : "Kredit"}</div></div>
+          <div class="metric"><div class="metric-label">Saldo Akhir</div><div class="metric-value">${fmtMoney(endingBalance)}</div></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Tanggal</th><th>Keterangan</th><th class="num">${currencyLabel("Debit")}</th><th class="num">${currencyLabel("Kredit")}</th><th class="num">${currencyLabel("Saldo")}</th></tr></thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }).join("");
+
+  return `
+    <div class="page-head">
+      <h1>📚 Buku Besar</h1>
+      <div class="page-cap">Semua akun yang memiliki aktivitas posting — ditampilkan lengkap, tanpa perlu memilih satu per satu.</div>
+    </div>
+    <div class="metric-grid"><div class="metric"><div class="metric-label">Akun Aktif</div><div class="metric-value">${codes.length}</div></div></div>
+    ${blocks}
+    <button class="btn btn-primary" data-action="export-ledger-xlsx">📥 Ekspor Semua Buku Besar ke Excel</button>
+  `;
+}
+
+
+// ============================================================================
+// PAGE — Neraca Saldo (Trial Balance)
+// ============================================================================
+function tplTrialBalance() {
+  if (state.journal.length === 0) {
+    return `<div class="page-head"><h1>⚖️ Neraca Saldo</h1></div><div class="alert alert-info">Belum ada transaksi tercatat.</div>`;
+  }
+  if (!state.tbAsOf) {
+    state.tbAsOf = state.journal.map(r => r.date).reduce((a, b) => a > b ? a : b);
+  }
+  const { rows, totalDebit, totalCredit } = computeTrialBalance(state.coa, state.journal, state.tbAsOf);
+  const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01;
+
+  if (rows.length === 0) {
+    return `<div class="page-head"><h1>⚖️ Neraca Saldo</h1></div>
+      <div class="field" style="max-width:240px;"><label class="field-label">Per Tanggal</label><input type="date" id="tb-asof" value="${state.tbAsOf}"></div>
+      <div class="alert alert-info">Belum ada aktivitas akun sampai tanggal ini.</div>`;
+  }
+
+  const rowsHtml = rows.map(r => `
+    <tr><td class="mono">${r.code}</td><td>${escapeHtml(r.account)}</td><td>${r.type}</td>
+      <td class="num mono">${r.debit ? fmtMoney(r.debit) : "–"}</td><td class="num mono">${r.credit ? fmtMoney(r.credit) : "–"}</td></tr>`).join("");
+
+  return `
+    <div class="page-head"><h1>⚖️ Neraca Saldo</h1></div>
+    <div class="field" style="max-width:240px;"><label class="field-label">Per Tanggal</label><input type="date" id="tb-asof" value="${state.tbAsOf}"></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Kode</th><th>Akun</th><th>Jenis</th><th class="num">${currencyLabel("Debit")}</th><th class="num">${currencyLabel("Kredit")}</th></tr></thead>
+        <tbody>${rowsHtml}
+          <tr class="total-row"><td colspan="3">TOTAL</td><td class="num mono">${fmtMoney(totalDebit)}</td><td class="num mono">${fmtMoney(totalCredit)}</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="alert ${isBalanced ? "alert-success" : "alert-danger"}" style="margin-top:1rem;">
+      ${isBalanced ? "✓ Neraca saldo seimbang." : "⚠ Neraca saldo TIDAK seimbang — periksa kembali posting transaksi."}
+    </div>
+    <button class="btn" data-action="export-tb-xlsx">📥 Ekspor ke Excel</button>
+  `;
+}
+function afterRenderTrialBalance() {
+  const el = document.getElementById("tb-asof");
+  if (el) el.addEventListener("change", e => { state.tbAsOf = e.target.value; renderPage(); });
+}
+
+// ============================================================================
+// PAGE — Laporan Keuangan (Financial Statements)
+// ============================================================================
+function fsCompute() {
+  const dates = state.journal.map(r => r.date);
+  if (!state.fsRange.start) state.fsRange.start = dates.reduce((a, b) => a < b ? a : b);
+  if (!state.fsRange.end) state.fsRange.end = dates.reduce((a, b) => a > b ? a : b);
+  const { start, end } = state.fsRange;
+  const income = computeIncomeStatement(state.coa, state.journal, start, end);
+  const equity = computeOwnersEquity(state.coa, state.journal, start, end, income.netIncome);
+  const bs = computeBalanceSheet(state.coa, state.journal, end, equity.endingCapital);
+  return { start, end, income, equity, bs };
+}
+
+function tplStatements() {
+  if (state.journal.length === 0) {
+    return `<div class="page-head"><h1>📊 Laporan Keuangan</h1></div><div class="alert alert-info">Belum ada transaksi tercatat.</div>`;
+  }
+  const { start, end, income, equity, bs } = fsCompute();
+  if (start > end) {
+    return `<div class="page-head"><h1>📊 Laporan Keuangan</h1></div>${fsRangePicker(start, end)}<div class="alert alert-danger">Tanggal Awal Periode harus sebelum atau sama dengan Tanggal Akhir Periode.</div>`;
+  }
+
+  const tabs = [["income","📊 Laba Rugi"], ["equity","👤 Perubahan Modal"], ["balance","🏛️ Neraca"]];
+  const tabsHtml = tabs.map(([k, label]) => `<button class="tab-btn ${state.fsTab===k?"active":""}" data-action="fs-tab" data-tab="${k}">${label}</button>`).join("");
+
+  let body = "";
+  if (state.fsTab === "income") body = fsIncomeTpl(start, end, income);
+  else if (state.fsTab === "equity") body = fsEquityTpl(start, end, equity);
+  else body = fsBalanceTpl(end, bs);
+
+  return `
+    <div class="page-head">
+      <h1>📊 Laporan Keuangan</h1>
+      <div class="page-cap">Pilih periode pelaporan. Agar laporan konsisten, Tanggal Awal Periode biasanya adalah hari pertama usaha berjalan — aplikasi otomatis membawa maju laba bersih periode sebelumnya, sehingga Neraca selalu seimbang.</div>
+    </div>
+    ${fsRangePicker(start, end)}
+    <div class="tabs">${tabsHtml}</div>
+    ${body}
+  `;
+}
+function fsRangePicker(start, end) {
+  return `<div class="input-row" style="max-width:480px; margin-bottom:1.1rem;">
+    <div><label class="field-label">Awal Periode</label><input type="date" id="fs-start" value="${start}"></div>
+    <div><label class="field-label">Akhir Periode</label><input type="date" id="fs-end" value="${end}"></div>
+  </div>`;
+}
+function fsIncomeTpl(start, end, income) {
+  const revLines = income.revenues.length
+    ? income.revenues.map(([,nm,amt]) => `<div class="stmt-line indent"><span>${escapeHtml(nm)}</span><span>${fmtMoney(amt)}</span></div>`).join("")
+    : `<div class="hint">(tidak ada pendapatan tercatat)</div>`;
+  const expLines = income.expenses.length
+    ? income.expenses.map(([,nm,amt]) => `<div class="stmt-line indent"><span>${escapeHtml(nm)}</span><span>${fmtMoney(amt)}</span></div>`).join("")
+    : `<div class="hint">(tidak ada beban tercatat)</div>`;
+  return `
+    <h4 style="font-size:0.95rem; margin-bottom:0.8rem;">Untuk Periode ${fmtDate(start,"long")} s.d. ${fmtDate(end,"long")}</h4>
+    <div class="ledger-card ledger-ruled">
+      <div class="stmt-caption">Pendapatan</div>${revLines}
+      <div class="stmt-subtotal"><span>Total Pendapatan</span><span>${fmtMoney(income.totalRevenue)}</span></div>
+      <div class="stmt-caption">Beban</div>${expLines}
+      <div class="stmt-subtotal"><span>Total Beban</span><span>${fmtMoney(income.totalExpenses)}</span></div>
+      <div class="stmt-total"><span>${income.netIncome >= 0 ? "LABA BERSIH" : "RUGI BERSIH"}</span><span>${fmtMoney(income.netIncome)}</span></div>
+    </div>
+    <button class="btn" data-action="export-income-xlsx">📥 Ekspor Laba Rugi ke Excel</button>
+  `;
+}
+function fsEquityTpl(start, end, equity) {
+  let lines = `<div class="stmt-line"><span>Modal Awal Pemilik</span><span>${fmtMoney(equity.beginningCapital)}</span></div>`;
+  if (Math.abs(equity.investment) > 0.005) lines += `<div class="stmt-line"><span>Ditambah: Setoran Pemilik</span><span>${fmtMoney(equity.investment)}</span></div>`;
+  lines += equity.netIncome >= 0
+    ? `<div class="stmt-line"><span>Ditambah: Laba Bersih</span><span>${fmtMoney(equity.netIncome)}</span></div>`
+    : `<div class="stmt-line"><span>Dikurangi: Rugi Bersih</span><span>${fmtMoney(equity.netIncome)}</span></div>`;
+  if (Math.abs(equity.drawings) > 0.005) lines += `<div class="stmt-line"><span>Dikurangi: Prive Pemilik</span><span>${fmtMoney(-equity.drawings)}</span></div>`;
+  return `
+    <h4 style="font-size:0.95rem; margin-bottom:0.8rem;">Untuk Periode ${fmtDate(start,"long")} s.d. ${fmtDate(end,"long")}</h4>
+    <div class="ledger-card ledger-ruled">
+      ${lines}
+      <div class="stmt-total"><span>Modal Akhir Pemilik</span><span>${fmtMoney(equity.endingCapital)}</span></div>
+    </div>
+    <button class="btn" data-action="export-equity-xlsx">📥 Ekspor Perubahan Modal ke Excel</button>
+  `;
+}
+function fsBalanceTpl(end, bs) {
+  const groupTitlesA = { "Current Asset": "Aset Lancar", "Fixed Asset": "Aset Tetap", "Other Asset": "Aset Lainnya" };
+  let assetsHtml = "";
+  for (const g of ["Current Asset", "Fixed Asset", "Other Asset"]) {
+    const items = bs.assetGroups[g] || [];
+    if (!items.length) continue;
+    let subtotal = 0;
+    const lines = items.map(([, nm, amt, isContra]) => {
+      subtotal += amt;
+      return `<div class="stmt-line indent"><span>${isContra ? "Dikurangi: " : ""}${escapeHtml(nm)}</span><span>${fmtMoney(amt)}</span></div>`;
+    }).join("");
+    const subLabel = g === "Fixed Asset" ? "Aset Tetap Bersih" : `Total ${groupTitlesA[g]}`;
+    assetsHtml += `<div class="stmt-caption">${groupTitlesA[g]}</div>${lines}<div class="stmt-subtotal"><span>${subLabel}</span><span>${fmtMoney(subtotal)}</span></div>`;
+  }
+  assetsHtml += `<div class="stmt-total"><span>TOTAL ASET</span><span>${fmtMoney(bs.totalAssets)}</span></div>`;
+
+  const groupTitlesL = { "Current Liability": "Liabilitas Lancar", "Long-Term Liability": "Liabilitas Jangka Panjang" };
+  let liabHtml = "";
+  let anyLiability = false;
+  for (const g of ["Current Liability", "Long-Term Liability"]) {
+    const items = bs.liabilityGroups[g] || [];
+    if (!items.length) continue;
+    anyLiability = true;
+    let subtotal = 0;
+    const lines = items.map(([, nm, amt]) => { subtotal += amt; return `<div class="stmt-line indent"><span>${escapeHtml(nm)}</span><span>${fmtMoney(amt)}</span></div>`; }).join("");
+    liabHtml += `<div class="stmt-caption">${groupTitlesL[g]}</div>${lines}<div class="stmt-subtotal"><span>Total ${groupTitlesL[g]}</span><span>${fmtMoney(subtotal)}</span></div>`;
+  }
+  if (!anyLiability) liabHtml += `<div class="hint">(tidak ada liabilitas tercatat)</div>`;
+  liabHtml += `<div class="stmt-subtotal"><span>Total Liabilitas</span><span>${fmtMoney(bs.totalLiabilities)}</span></div>`;
+  liabHtml += `<div class="stmt-caption">Modal Pemilik</div>
+    <div class="stmt-line indent"><span>Modal Akhir Pemilik</span><span>${fmtMoney(bs.equity)}</span></div>
+    <div class="stmt-subtotal"><span>Total Modal Pemilik</span><span>${fmtMoney(bs.equity)}</span></div>
+    <div class="stmt-total"><span>TOTAL LIABILITAS &amp; MODAL</span><span>${fmtMoney(bs.totalLiabEquity)}</span></div>`;
+
+  return `
+    <h4 style="font-size:0.95rem; margin-bottom:0.8rem;">Per ${fmtDate(end,"long")}</h4>
+    <div class="two-col">
+      <div class="ledger-card ledger-ruled"><div class="stmt-caption" style="font-size:0.9rem;">Aset</div>${assetsHtml}</div>
+      <div class="ledger-card ledger-ruled"><div class="stmt-caption" style="font-size:0.9rem;">Liabilitas &amp; Modal</div>${liabHtml}</div>
+    </div>
+    <div class="alert ${bs.isBalanced ? "alert-success" : "alert-danger"}">
+      ${bs.isBalanced ? "✓ Aset = Liabilitas + Modal Pemilik — Neraca seimbang." : "⚠ Neraca tidak seimbang. Biasanya ini terjadi karena Jenis/Subjenis suatu akun diubah di Kode Akun setelah transaksi diposting ke akun tersebut."}
+    </div>
+    <button class="btn" data-action="export-bs-xlsx">📥 Ekspor Neraca ke Excel</button>
+  `;
+}
+
+
+function afterRenderStatements() {
+  const s = document.getElementById("fs-start"), e = document.getElementById("fs-end");
+  if (s) s.addEventListener("change", ev => { state.fsRange.start = ev.target.value; renderPage(); });
+  if (e) e.addEventListener("change", ev => { state.fsRange.end = ev.target.value; renderPage(); });
+}
+
+
+// ============================================================================
+// PAGE — Kode Akun (Chart of Accounts)
+// ============================================================================
+function tplCOA() {
+  const codes = E_sortedAccountCodes();
+  const rows = codes.map(c => {
+    const info = accountInfo(state.coa, c);
+    return `<tr><td class="mono">${c}</td><td>${escapeHtml(info.name)}</td><td>${info.type}</td><td>${info.subtype}</td>
+      <td>${accountNormalBalance(state.coa, c) === "Debit" ? "Debit" : "Kredit"}</td><td>${info.contra ? "Ya" : ""}</td></tr>`;
+  }).join("");
+
+  const tabs = [["add","➕ Tambah Akun"], ["edit","✏️ Ubah Akun"], ["remove","🗑️ Hapus Akun"]];
+  const tabsHtml = tabs.map(([k,label]) => `<button class="tab-btn ${state.coaTab===k?"active":""}" data-action="coa-tab" data-tab="${k}">${label}</button>`).join("");
+
+  let body = "";
+  if (state.coaTab === "add") body = coaAddTpl();
+  else if (state.coaTab === "edit") body = coaEditTpl();
+  else body = coaRemoveTpl();
+
+  return `
+    <div class="page-head"><h1>🗂️ Kode Akun</h1></div>
+    <div class="table-wrap" style="margin-bottom:1.3rem;">
+      <table>
+        <thead><tr><th>Kode</th><th>Nama</th><th>Jenis</th><th>Subjenis</th><th>Saldo Normal</th><th>Kontra</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div class="tabs">${tabsHtml}</div>
+    ${body}
+  `;
+}
+
+function subtypeOptionsHtml(type, selected) {
+  return (SUBTYPES_BY_TYPE[type] || []).map(s => `<option value="${s}" ${s===selected?"selected":""}>${s}</option>`).join("");
+}
+function typeOptionsHtml(selected) {
+  return ACCOUNT_TYPES.map(t => `<option value="${t}" ${t===selected?"selected":""}>${t}</option>`).join("");
+}
+
+function coaAddTpl() {
+  return `
+    <div class="ledger-card">
+      <div class="two-col">
+        <div class="field"><label class="field-label">Kode Akun</label><input type="text" id="coa-add-code" placeholder="mis. 106"></div>
+        <div class="field"><label class="field-label">Nama Akun</label><input type="text" id="coa-add-name" placeholder="mis. Asuransi Dibayar Dimuka"></div>
+      </div>
+      <div class="two-col">
+        <div class="field"><label class="field-label">Jenis</label><select id="coa-add-type">${typeOptionsHtml("Asset")}</select></div>
+        <div class="field"><label class="field-label">Subjenis</label><select id="coa-add-subtype">${subtypeOptionsHtml("Asset")}</select></div>
+      </div>
+      <div class="field">
+        <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.86rem; font-weight:600;">
+          <input type="checkbox" id="coa-add-contra" style="width:auto;"> Ini akun kontra (mis. Akumulasi Penyusutan) — mengurangi kategorinya, bukan menambah
+        </label>
+      </div>
+      <button class="btn btn-primary" data-action="coa-add-submit">Tambah Akun</button>
+    </div>
+  `;
+}
+function coaEditTpl() {
+  const codes = E_sortedAccountCodes();
+  if (!codes.length) return `<div class="alert alert-info">Belum ada akun untuk diubah.</div>`;
+  const sel = state.editingAcct && codes.includes(state.editingAcct) ? state.editingAcct : codes[0];
+  const info = accountInfo(state.coa, sel);
+  const opts = accountOptions(codes);
+  return `
+    <div class="ledger-card">
+      <div class="field"><label class="field-label">Pilih Akun</label>
+        <select id="coa-edit-select">${opts.map(o=>`<option value="${o.code}" ${o.code===sel?"selected":""}>${escapeHtml(o.label)}</option>`).join("")}</select>
+      </div>
+      <div class="field"><label class="field-label">Nama Akun</label><input type="text" id="coa-edit-name" value="${escapeHtml(info.name)}"></div>
+      <div class="two-col">
+        <div class="field"><label class="field-label">Jenis</label><select id="coa-edit-type">${typeOptionsHtml(info.type)}</select></div>
+        <div class="field"><label class="field-label">Subjenis</label><select id="coa-edit-subtype">${subtypeOptionsHtml(info.type, info.subtype)}</select></div>
+      </div>
+      <div class="field">
+        <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.86rem; font-weight:600;">
+          <input type="checkbox" id="coa-edit-contra" style="width:auto;" ${info.contra?"checked":""}> Ini akun kontra
+        </label>
+      </div>
+      <button class="btn btn-primary" data-action="coa-edit-submit" data-code="${sel}">💾 Simpan Perubahan</button>
+      <p class="hint" style="margin-top:0.8rem;">Mengubah Jenis/Subjenis akun setelah transaksi diposting ke akun itu akan mengubah cara akun tersebut dikelompokkan pada laporan berikutnya.</p>
+    </div>
+  `;
+}
+function coaRemoveTpl() {
+  const codes = E_sortedAccountCodes();
+  if (!codes.length) return `<div class="alert alert-info">Belum ada akun untuk dihapus.</div>`;
+  const sel = state.editingAcct && codes.includes(state.editingAcct) ? state.editingAcct : codes[0];
+  const opts = accountOptions(codes);
+  const inUse = state.journal.some(r => r.post_ref === sel);
+  let actionHtml;
+  if (inUse) {
+    actionHtml = `<div class="alert alert-warning">Akun <b>${sel} — ${escapeHtml(accountName(state.coa, sel))}</b> memiliki transaksi yang sudah diposting dan tidak dapat dihapus. Hapus transaksi tersebut terlebih dahulu jika akun ini benar-benar perlu dihapus.</div>`;
+  } else {
+    actionHtml = `<button class="btn btn-danger" data-action="coa-remove-submit" data-code="${sel}">🗑️ Hapus Akun Ini</button>`;
+  }
+  return `
+    <div class="ledger-card">
+      <div class="field"><label class="field-label">Pilih Akun</label>
+        <select id="coa-remove-select">${opts.map(o=>`<option value="${o.code}" ${o.code===sel?"selected":""}>${escapeHtml(o.label)}</option>`).join("")}</select>
+      </div>
+      ${actionHtml}
+    </div>
+  `;
+}
+
+function afterRenderCOA() {
+  const typeSel = document.getElementById("coa-add-type");
+  if (typeSel) typeSel.addEventListener("change", e => {
+    document.getElementById("coa-add-subtype").innerHTML = subtypeOptionsHtml(e.target.value);
+  });
+  const editTypeSel = document.getElementById("coa-edit-type");
+  if (editTypeSel) editTypeSel.addEventListener("change", e => {
+    document.getElementById("coa-edit-subtype").innerHTML = subtypeOptionsHtml(e.target.value);
+  });
+  const editSel = document.getElementById("coa-edit-select");
+  if (editSel) editSel.addEventListener("change", e => { state.editingAcct = e.target.value; renderPage(); });
+  const removeSel = document.getElementById("coa-remove-select");
+  if (removeSel) removeSel.addEventListener("change", e => { state.editingAcct = e.target.value; renderPage(); });
+}
+
+function coaAddSubmit() {
+  const code = document.getElementById("coa-add-code").value.trim();
+  const name = document.getElementById("coa-add-name").value.trim();
+  const type = document.getElementById("coa-add-type").value;
+  const subtype = document.getElementById("coa-add-subtype").value;
+  const contra = document.getElementById("coa-add-contra").checked;
+  if (!code || !name) { showToast("Kode Akun dan Nama Akun wajib diisi.", "danger"); return; }
+  if (state.coa[code]) { showToast(`Kode akun ${code} sudah ada.`, "danger"); return; }
+  state.coa[code] = { name, type, subtype, contra };
+  persistCOA();
+  showToast(`Akun ${code} — ${name} ditambahkan.`, "success");
+  renderPage();
+}
+function coaEditSubmit() {
+  const code = document.getElementById("coa-edit-select").value;
+  const name = document.getElementById("coa-edit-name").value.trim() || accountInfo(state.coa, code).name;
+  const type = document.getElementById("coa-edit-type").value;
+  const subtype = document.getElementById("coa-edit-subtype").value;
+  const contra = document.getElementById("coa-edit-contra").checked;
+  state.coa[code] = { name, type, subtype, contra };
+  persistCOA();
+  showToast(`Akun ${code} diperbarui.`, "success");
+  renderPage();
+}
+function coaRemoveSubmit(code) {
+  openModal({
+    title: "Hapus akun ini?",
+    body: `Akun ${code} — ${accountName(state.coa, code)} akan dihapus permanen.`,
+    actions: [
+      { label: "Batal" },
+      { label: "Ya, hapus", variant: "danger", onClick: () => {
+        delete state.coa[code];
+        persistCOA();
+        showToast("Akun dihapus.", "success");
+        renderPage();
+      }},
+    ],
+  });
+}
+
+
+// ============================================================================
+// PAGE — Ekspor & Backup (Export & Backup)
+// ============================================================================
+function tplExport() {
+  const hasData = state.journal.length > 0;
+  const dates = hasData ? state.journal.map(r => r.date) : [];
+  const inception = hasData ? dates.reduce((a,b)=>a<b?a:b) : null;
+  const latest = hasData ? dates.reduce((a,b)=>a>b?a:b) : null;
+  const nTxn = hasData ? new Set(state.journal.map(r=>r.transaction_id)).size : 0;
+  const nAccts = new Set(state.journal.map(r=>r.post_ref)).size;
+
+  return `
+    <div class="page-head">
+      <h1>📦 Ekspor &amp; Backup</h1>
+      <div class="page-cap">Data disimpan hanya di peramban ini. Ekspor cadangan (.json) secara berkala agar data tidak hilang jika cache peramban dibersihkan atau kamu berpindah perangkat.</div>
+    </div>
+
+    <div class="ledger-card">
+      <div class="card-title">📥 Buku Kerja Excel — Satu Siklus Penuh</div>
+      <p class="hint" style="margin:-0.2rem 0 0.9rem 0;">Satu file Excel, satu sheet per laporan, berurutan: Jurnal Umum → Buku Besar → Neraca Saldo → Laba Rugi → Perubahan Modal → Neraca.</p>
+      ${hasData ? `
+        <div class="metric-grid">
+          <div class="metric"><div class="metric-label">Periode</div><div class="metric-value" style="font-size:0.95rem;">${fmtDate(inception)} – ${fmtDate(latest)}</div></div>
+          <div class="metric"><div class="metric-label">Transaksi</div><div class="metric-value">${nTxn}</div></div>
+          <div class="metric"><div class="metric-label">Akun Aktif</div><div class="metric-value">${nAccts}</div></div>
+        </div>
+        <button class="btn btn-primary" data-action="export-full-cycle">📥 Buat &amp; Unduh Buku Kerja Lengkap</button>
+      ` : `<div class="alert alert-info">Belum ada transaksi. Catat entri terlebih dahulu di <b>Input Jurnal</b>.</div>`}
+    </div>
+
+    <div class="ledger-card">
+      <div class="card-title">💾 Cadangan Data (JSON)</div>
+      <p class="hint" style="margin:-0.2rem 0 0.9rem 0;">Cadangan mentah semua data (Kode Akun, Jurnal, Pengaturan) dalam satu file .json — bisa dipulihkan kapan saja, termasuk di peramban atau perangkat lain.</p>
+      <div style="display:flex; gap:0.6rem; flex-wrap:wrap;">
+        <button class="btn" data-action="backup-export">⬇️ Unduh Cadangan (.json)</button>
+        <button class="btn" data-action="backup-import-btn">⬆️ Pulihkan dari Cadangan</button>
+      </div>
+    </div>
+  `;
+}
+
+
+// ============================================================================
+// EXCEL EXPORT — via ExcelJS (loaded from CDN). Same visual language across
+// every sheet: dark header band, light column headers, thin borders, and a
+// double bottom rule under final totals (standard ledger-statement style).
+// ============================================================================
+const XLF = { name: "Calibri" };
+const XL_TITLE_BG = "FF1F6E4A", XL_TITLE_FONT = "FFFFFFFF", XL_SUBTITLE_FONT = "FF44544C";
+const XL_HEADER_BG = "FF2E7D53", XL_HEADER_FONT = "FFFFFFFF";
+const XL_TOTAL_BG = "FFE1F0E6", XL_SUBTOTAL_BG = "FFEEF6F1", XL_BORDER = "FFBFD9CB";
+
+function xlThinBorder() {
+  const t = { style: "thin", color: { argb: XL_BORDER } };
+  return { top: t, left: t, right: t, bottom: t };
+}
+function xlDoubleBottomBorder() {
+  const t = { style: "thin", color: { argb: XL_BORDER } };
+  return { top: t, left: t, right: t, bottom: { style: "double", color: { argb: "FF16211C" } } };
+}
+function xlFill(argb) { return { type: "pattern", pattern: "solid", fgColor: { argb } }; }
+function xlNumFmt(cur) {
+  return cur === "Rp" ? '_-"Rp"* #,##0_-;-"Rp"* #,##0_-;_-"Rp"* "-"_-;_-@_-' : '_($* #,##0.00_);_($* (#,##0.00);_($* "-"??_);_(@_)';
+}
+
+function xlTitleBlock(ws, title, subtitle, numCols) {
+  ws.mergeCells(1, 1, 1, numCols);
+  const c = ws.getCell(1, 1);
+  c.value = title;
+  c.font = { name: XLF.name, bold: true, size: 15, color: { argb: XL_TITLE_FONT } };
+  c.fill = xlFill(XL_TITLE_BG);
+  c.alignment = { horizontal: "center", vertical: "middle" };
+  ws.getRow(1).height = 26;
+  let row = 2;
+  if (subtitle) {
+    ws.mergeCells(2, 1, 2, numCols);
+    const sc = ws.getCell(2, 1);
+    sc.value = subtitle;
+    sc.font = { name: XLF.name, italic: true, size: 10.5, color: { argb: XL_SUBTITLE_FONT } };
+    sc.fill = xlFill("FFF4F1EA");
+    sc.alignment = { horizontal: "center", vertical: "middle" };
+    ws.getRow(2).height = 18;
+    row = 3;
+  }
+  return row + 1;
+}
+
+function xlHeaderRow(ws, row, headers, currencyCols) {
+  currencyCols = currencyCols || new Set();
+  headers.forEach((h, i) => {
+    const idx = i + 1;
+    const c = ws.getCell(row, idx);
+    c.value = h;
+    c.font = { name: XLF.name, bold: true, size: 10.5, color: { argb: XL_HEADER_FONT } };
+    c.fill = xlFill(XL_HEADER_BG);
+    c.alignment = { horizontal: currencyCols.has(idx) ? "right" : "left", vertical: "middle", indent: currencyCols.has(idx) ? 0 : 1 };
+    c.border = xlThinBorder();
+  });
+  ws.getRow(row).height = 20;
+  return row + 1;
+}
+
+// blocks: ["spacer"] | ["header", text] | ["subheader", text] | ["line", label, amount, indent?]
+//       | ["subtotal", label, amount] | ["total", label, amount]
+function xlWriteStatementRows(ws, row, blocks, cur) {
+  const numFmt = xlNumFmt(cur);
+  for (const block of blocks) {
+    const kind = block[0];
+    if (kind === "spacer") { row += 1; continue; }
+    if (kind === "header") {
+      ws.mergeCells(row, 1, row, 2);
+      const c = ws.getCell(row, 1);
+      c.value = block[1];
+      c.font = { name: XLF.name, bold: true, size: 12, color: { argb: XL_HEADER_FONT } };
+      c.fill = xlFill(XL_HEADER_BG);
+      c.alignment = { horizontal: "left", vertical: "middle", indent: 1 };
+      ws.getRow(row).height = 20;
+      row += 1;
+    } else if (kind === "subheader") {
+      ws.mergeCells(row, 1, row, 2);
+      const c = ws.getCell(row, 1);
+      c.value = block[1];
+      c.font = { name: XLF.name, bold: true, italic: true, size: 10.5, color: { argb: XL_TITLE_BG } };
+      c.fill = xlFill(XL_SUBTOTAL_BG);
+      c.alignment = { horizontal: "left", vertical: "middle", indent: 1 };
+      row += 1;
+    } else if (kind === "line") {
+      const [, label, amount, indent] = block;
+      const lc = ws.getCell(row, 1); lc.value = label; lc.font = { name: XLF.name, size: 10.5 }; lc.alignment = { horizontal: "left", indent: indent ?? 2 };
+      const ac = ws.getCell(row, 2); ac.value = round2(amount); ac.font = { name: XLF.name, size: 10.5 }; ac.numFmt = numFmt; ac.alignment = { horizontal: "right" };
+      row += 1;
+    } else if (kind === "subtotal") {
+      const [, label, amount] = block;
+      const border = { top: { style: "thin", color: { argb: XL_BORDER } } };
+      const lc = ws.getCell(row, 1); lc.value = label; lc.font = { name: XLF.name, bold: true, size: 10.5 }; lc.alignment = { horizontal: "left", indent: 1 }; lc.border = border;
+      const ac = ws.getCell(row, 2); ac.value = round2(amount); ac.font = { name: XLF.name, bold: true, size: 10.5 }; ac.numFmt = numFmt; ac.alignment = { horizontal: "right" }; ac.border = border;
+      row += 1;
+    } else if (kind === "total") {
+      const [, label, amount] = block;
+      const fill = xlFill(XL_TOTAL_BG), border = xlDoubleBottomBorder();
+      const lc = ws.getCell(row, 1); lc.value = label; lc.font = { name: XLF.name, bold: true, size: 11 }; lc.fill = fill; lc.border = border; lc.alignment = { horizontal: "left", indent: 1 };
+      const ac = ws.getCell(row, 2); ac.value = round2(amount); ac.font = { name: XLF.name, bold: true, size: 11 }; ac.numFmt = numFmt; ac.fill = fill; ac.border = border; ac.alignment = { horizontal: "right" };
+      row += 1;
+    }
+  }
+  return row;
+}
+
+function xlGenerateJournal(wb, groups, cur, sheetName) {
+  const ws = wb.addWorksheet(sheetName || "General Journal");
+  ws.columns = [{width:13},{width:34},{width:10},{width:30},{width:18},{width:18}];
+  let row = xlTitleBlock(ws, "Jurnal Umum", "Seluruh Transaksi Tercatat", 6);
+  row = xlHeaderRow(ws, row, ["Tanggal","Nama Akun","Ref.","Keterangan", currencyLabel("Debit",cur), currencyLabel("Kredit",cur)], new Set([5,6]));
+  const numFmt = xlNumFmt(cur), thin = xlThinBorder();
+  for (const g of groups) {
+    g.lines.forEach((line, i) => {
+      const isCreditLine = line.credit > 0;
+      const title = (isCreditLine ? "    " : "") + line.account_title;
+      const c1 = ws.getCell(row, 1);
+      if (i === 0) { c1.value = new Date(g.date + "T00:00:00"); c1.numFmt = "dd-mmm-yyyy"; }
+      const c2 = ws.getCell(row, 2); c2.value = title;
+      const c3 = ws.getCell(row, 3); c3.value = String(line.post_ref);
+      const c4 = ws.getCell(row, 4); c4.value = i === 0 ? (line.explanation || "") : "";
+      const c5 = ws.getCell(row, 5); c5.value = line.debit ? round2(line.debit) : null;
+      const c6 = ws.getCell(row, 6); c6.value = line.credit ? round2(line.credit) : null;
+      [c1,c2,c3,c4,c5,c6].forEach(c => { c.border = thin; c.font = { name: XLF.name, size: 10.5 }; });
+      c5.numFmt = numFmt; c6.numFmt = numFmt;
+      c5.alignment = { horizontal: "right" }; c6.alignment = { horizontal: "right" };
+      row += 1;
+    });
+  }
+  ws.views = [{ state: "frozen", ySplit: row > 1 ? (row - groups.reduce((s,g)=>s+g.lines.length,0)) : 1 }];
+  return ws;
+}
+
+function xlGenerateAllLedgers(wb, cur, sheetName) {
+  const ws = wb.addWorksheet(sheetName || "General Ledger");
+  ws.columns = [{width:13},{width:42},{width:18},{width:18},{width:18}];
+  let row = xlTitleBlock(ws, "Buku Besar", "Semua Akun Dengan Aktivitas Posting", 5);
+  const numFmt = xlNumFmt(cur), thin = xlThinBorder();
+  const codes = accountsWithActivity(state.coa, state.journal);
+  if (!codes.length) {
+    ws.getCell(row, 1).value = "Belum ada posting.";
+    ws.getCell(row, 1).font = { name: XLF.name, italic: true };
+    return ws;
+  }
+  for (const code of codes) {
+    const info = accountInfo(state.coa, code);
+    const { rows: ledgerRows, endingBalance } = computeAccountLedgerRows(state.coa, state.journal, code);
+    ws.mergeCells(row, 1, row, 5);
+    const hc = ws.getCell(row, 1);
+    hc.value = `${code} — ${info.name}  (${info.type} · ${info.subtype})`;
+    hc.font = { name: XLF.name, bold: true, size: 11, color: { argb: XL_HEADER_FONT } };
+    hc.fill = xlFill(XL_HEADER_BG);
+    hc.alignment = { horizontal: "left", vertical: "middle", indent: 1 };
+    ws.getRow(row).height = 20;
+    row += 1;
+
+    ["Tanggal","Keterangan",currencyLabel("Debit",cur),currencyLabel("Kredit",cur),currencyLabel("Saldo",cur)].forEach((h, i) => {
+      const idx = i + 1;
+      const c = ws.getCell(row, idx);
+      c.value = h;
+      c.font = { name: XLF.name, bold: true, italic: true, size: 10 };
+      c.fill = xlFill(XL_SUBTOTAL_BG);
+      c.alignment = { horizontal: idx >= 3 ? "right" : "left", vertical: "middle", indent: idx >= 3 ? 0 : 1 };
+      c.border = thin;
+    });
+    row += 1;
+
+    const firstDataRow = row;
+    for (const r of ledgerRows) {
+      const c1 = ws.getCell(row, 1); c1.value = new Date(r.date + "T00:00:00"); c1.numFmt = "dd-mmm-yyyy";
+      const c2 = ws.getCell(row, 2); c2.value = r.description;
+      const c3 = ws.getCell(row, 3); c3.value = r.debit ? round2(r.debit) : null;
+      const c4 = ws.getCell(row, 4); c4.value = r.credit ? round2(r.credit) : null;
+      const c5 = ws.getCell(row, 5); c5.value = round2(r.balance);
+      [c1,c2,c3,c4,c5].forEach(c => { c.border = thin; c.font = { name: XLF.name, size: 10 }; });
+      c1.alignment = { horizontal: "center" }; c2.alignment = { horizontal: "left", indent: 1 };
+      [c3,c4,c5].forEach(c => c.numFmt = numFmt);
+      row += 1;
+    }
+    const lastDataRow = row - 1;
+    ws.getCell(row, 2).value = "Saldo Akhir"; ws.getCell(row, 2).alignment = { horizontal: "right" };
+    const tc3 = ws.getCell(row, 3); tc3.value = lastDataRow >= firstDataRow ? { formula: `SUM(C${firstDataRow}:C${lastDataRow})` } : 0;
+    const tc4 = ws.getCell(row, 4); tc4.value = lastDataRow >= firstDataRow ? { formula: `SUM(D${firstDataRow}:D${lastDataRow})` } : 0;
+    const tc5 = ws.getCell(row, 5); tc5.value = round2(endingBalance);
+    [ws.getCell(row,2), tc3, tc4, tc5].forEach(c => { c.fill = xlFill(XL_TOTAL_BG); c.border = xlDoubleBottomBorder(); c.font = { name: XLF.name, bold: true, size: 10 }; });
+    tc3.numFmt = numFmt; tc4.numFmt = numFmt; tc5.numFmt = numFmt;
+    row += 2;
+  }
+  return ws;
+}
+
+function xlGenerateTrialBalance(wb, tb, asOf, cur, sheetName) {
+  const ws = wb.addWorksheet(sheetName || "Trial Balance");
+  ws.columns = [{width:12},{width:36},{width:20},{width:20}];
+  let row = xlTitleBlock(ws, "Neraca Saldo", `Per ${fmtDate(asOf,"long")}`, 4);
+  row = xlHeaderRow(ws, row, ["Kode","Akun",currencyLabel("Debit",cur),currencyLabel("Kredit",cur)], new Set([3,4]));
+  const numFmt = xlNumFmt(cur), thin = xlThinBorder();
+  const firstDataRow = row;
+  for (const r of tb.rows) {
+    const c1 = ws.getCell(row,1); c1.value = String(r.code);
+    const c2 = ws.getCell(row,2); c2.value = r.account;
+    const c3 = ws.getCell(row,3); c3.value = r.debit ? round2(r.debit) : null;
+    const c4 = ws.getCell(row,4); c4.value = r.credit ? round2(r.credit) : null;
+    [c1,c2,c3,c4].forEach(c => { c.border = thin; c.font = { name: XLF.name, size: 10.5 }; });
+    c1.alignment = { horizontal: "center" }; c2.alignment = { horizontal: "left", indent: 1 };
+    c3.numFmt = numFmt; c4.numFmt = numFmt;
+    row += 1;
+  }
+  const lastDataRow = row - 1;
+  const totalRow = row;
+  ws.getCell(totalRow,2).value = "TOTAL"; ws.getCell(totalRow,2).alignment = { horizontal: "right" };
+  const tc3 = ws.getCell(totalRow,3); tc3.value = lastDataRow >= firstDataRow ? { formula: `SUM(C${firstDataRow}:C${lastDataRow})` } : 0;
+  const tc4 = ws.getCell(totalRow,4); tc4.value = lastDataRow >= firstDataRow ? { formula: `SUM(D${firstDataRow}:D${lastDataRow})` } : 0;
+  [ws.getCell(totalRow,2), tc3, tc4].forEach(c => { c.fill = xlFill(XL_TOTAL_BG); c.border = xlDoubleBottomBorder(); c.font = { name: XLF.name, bold: true }; });
+  tc3.numFmt = numFmt; tc4.numFmt = numFmt;
+
+  const noteRow = totalRow + 2;
+  const isBalanced = Math.abs(tb.totalDebit - tb.totalCredit) < 0.01;
+  ws.mergeCells(noteRow,1,noteRow,4);
+  const nc = ws.getCell(noteRow,1);
+  nc.value = isBalanced ? "✓ Neraca saldo seimbang." : "⚠ Neraca saldo TIDAK seimbang — periksa kembali posting.";
+  nc.font = { name: XLF.name, italic: true, bold: !isBalanced, color: { argb: isBalanced ? "FF154D33" : "FFB0242B" } };
+  ws.views = [{ state: "frozen", ySplit: firstDataRow - 1 }];
+  return ws;
+}
+
+function xlGenerateIncomeStatement(wb, stmt, start, end, cur, sheetName) {
+  const ws = wb.addWorksheet(sheetName || "Income Statement");
+  ws.getColumn(1).width = 40; ws.getColumn(2).width = 22;
+  let row = xlTitleBlock(ws, "Laporan Laba Rugi", `Untuk Periode ${fmtDate(start,"short")} s.d. ${fmtDate(end,"short")}`, 2);
+  const blocks = [["header","PENDAPATAN"]];
+  for (const [,nm,amt] of stmt.revenues) blocks.push(["line", nm, amt]);
+  if (!stmt.revenues.length) blocks.push(["line","(tidak ada pendapatan tercatat)",0]);
+  blocks.push(["subtotal","Total Pendapatan", stmt.totalRevenue]);
+  blocks.push(["spacer"]);
+  blocks.push(["header","BEBAN"]);
+  for (const [,nm,amt] of stmt.expenses) blocks.push(["line", nm, amt]);
+  if (!stmt.expenses.length) blocks.push(["line","(tidak ada beban tercatat)",0]);
+  blocks.push(["subtotal","Total Beban", stmt.totalExpenses]);
+  blocks.push(["spacer"]);
+  blocks.push(["total", stmt.netIncome >= 0 ? "LABA BERSIH" : "RUGI BERSIH", stmt.netIncome]);
+  xlWriteStatementRows(ws, row, blocks, cur);
+  return ws;
+}
+
+function xlGenerateOwnersEquity(wb, stmt, start, end, cur, sheetName) {
+  const ws = wb.addWorksheet(sheetName || "Owner's Equity");
+  ws.getColumn(1).width = 42; ws.getColumn(2).width = 22;
+  let row = xlTitleBlock(ws, "Laporan Perubahan Modal", `Untuk Periode ${fmtDate(start,"short")} s.d. ${fmtDate(end,"short")}`, 2);
+  const blocks = [["line","Modal Awal Pemilik", stmt.beginningCapital, 1]];
+  if (Math.abs(stmt.investment) > 0.005) blocks.push(["line","Ditambah: Setoran Pemilik", stmt.investment, 1]);
+  blocks.push(stmt.netIncome >= 0 ? ["line","Ditambah: Laba Bersih", stmt.netIncome, 1] : ["line","Dikurangi: Rugi Bersih", stmt.netIncome, 1]);
+  if (Math.abs(stmt.drawings) > 0.005) blocks.push(["line","Dikurangi: Prive Pemilik", -stmt.drawings, 1]);
+  blocks.push(["spacer"]);
+  blocks.push(["total","Modal Akhir Pemilik", stmt.endingCapital]);
+  xlWriteStatementRows(ws, row, blocks, cur);
+  return ws;
+}
+
+function xlGenerateBalanceSheet(wb, stmt, asOf, cur, sheetName) {
+  const ws = wb.addWorksheet(sheetName || "Balance Sheet");
+  ws.getColumn(1).width = 42; ws.getColumn(2).width = 22;
+  let row = xlTitleBlock(ws, "Neraca", `Per ${fmtDate(asOf,"short")}`, 2);
+  const blocks = [["header","ASET"]];
+  const groupOrder = ["Current Asset","Fixed Asset","Other Asset"];
+  const groupTitles = { "Current Asset":"Aset Lancar", "Fixed Asset":"Aset Tetap", "Other Asset":"Aset Lainnya" };
+  for (const g of groupOrder) {
+    const items = stmt.assetGroups[g] || [];
+    if (!items.length) continue;
+    blocks.push(["subheader", groupTitles[g]]);
+    let subtotal = 0;
+    for (const [,nm,amount,isContra] of items) { blocks.push(["line", isContra ? `Dikurangi: ${nm}` : nm, amount]); subtotal += amount; }
+    blocks.push(["subtotal", g === "Fixed Asset" ? "Aset Tetap Bersih" : `Total ${groupTitles[g]}`, subtotal]);
+    blocks.push(["spacer"]);
+  }
+  blocks.push(["total","TOTAL ASET", stmt.totalAssets]);
+  blocks.push(["spacer"]); blocks.push(["spacer"]);
+
+  blocks.push(["header","LIABILITAS"]);
+  const lOrder = ["Current Liability","Long-Term Liability"];
+  const lTitles = { "Current Liability":"Liabilitas Lancar", "Long-Term Liability":"Liabilitas Jangka Panjang" };
+  let anyLiability = false;
+  for (const g of lOrder) {
+    const items = stmt.liabilityGroups[g] || [];
+    if (!items.length) continue;
+    anyLiability = true;
+    blocks.push(["subheader", lTitles[g]]);
+    let subtotal = 0;
+    for (const [,nm,amount] of items) { blocks.push(["line", nm, amount]); subtotal += amount; }
+    blocks.push(["subtotal", `Total ${lTitles[g]}`, subtotal]);
+    blocks.push(["spacer"]);
+  }
+  if (!anyLiability) { blocks.push(["line","(tidak ada liabilitas tercatat)",0]); blocks.push(["spacer"]); }
+  blocks.push(["subtotal","Total Liabilitas", stmt.totalLiabilities]);
+  blocks.push(["spacer"]);
+
+  blocks.push(["header","MODAL PEMILIK"]);
+  blocks.push(["line","Modal Akhir Pemilik", stmt.equity, 2]);
+  blocks.push(["subtotal","Total Modal Pemilik", stmt.equity]);
+  blocks.push(["spacer"]);
+  blocks.push(["total","TOTAL LIABILITAS & MODAL", stmt.totalLiabEquity]);
+
+  xlWriteStatementRows(ws, row, blocks, cur);
+  return ws;
+}
+
+async function downloadWorkbook(wb, filename) {
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  saveBlob(blob, filename);
+}
+function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+async function exportJournalXlsx() {
+  try {
+    const wb = new ExcelJS.Workbook();
+    xlGenerateJournal(wb, journalGroups(getFilteredJournal()), currency());
+    await downloadWorkbook(wb, "jurnal_umum.xlsx");
+    showToast("Jurnal berhasil diekspor.", "success");
+  } catch (e) { console.error(e); showToast("Gagal membuat file Excel: " + e.message, "danger"); }
+}
+async function exportLedgerXlsx() {
+  try {
+    const wb = new ExcelJS.Workbook();
+    xlGenerateAllLedgers(wb, currency());
+    await downloadWorkbook(wb, "buku_besar.xlsx");
+    showToast("Buku besar berhasil diekspor.", "success");
+  } catch (e) { console.error(e); showToast("Gagal membuat file Excel: " + e.message, "danger"); }
+}
+async function exportTbXlsx() {
+  try {
+    const wb = new ExcelJS.Workbook();
+    const tb = computeTrialBalance(state.coa, state.journal, state.tbAsOf);
+    xlGenerateTrialBalance(wb, tb, state.tbAsOf, currency());
+    await downloadWorkbook(wb, "neraca_saldo.xlsx");
+    showToast("Neraca saldo berhasil diekspor.", "success");
+  } catch (e) { console.error(e); showToast("Gagal membuat file Excel: " + e.message, "danger"); }
+}
+async function exportIncomeXlsx() {
+  try {
+    const wb = new ExcelJS.Workbook();
+    const { start, end, income } = fsCompute();
+    xlGenerateIncomeStatement(wb, income, start, end, currency());
+    await downloadWorkbook(wb, "laba_rugi.xlsx");
+    showToast("Laporan laba rugi berhasil diekspor.", "success");
+  } catch (e) { console.error(e); showToast("Gagal membuat file Excel: " + e.message, "danger"); }
+}
+async function exportEquityXlsx() {
+  try {
+    const wb = new ExcelJS.Workbook();
+    const { start, end, equity } = fsCompute();
+    xlGenerateOwnersEquity(wb, equity, start, end, currency());
+    await downloadWorkbook(wb, "perubahan_modal.xlsx");
+    showToast("Laporan perubahan modal berhasil diekspor.", "success");
+  } catch (e) { console.error(e); showToast("Gagal membuat file Excel: " + e.message, "danger"); }
+}
+async function exportBsXlsx() {
+  try {
+    const wb = new ExcelJS.Workbook();
+    const { end, bs } = fsCompute();
+    xlGenerateBalanceSheet(wb, bs, end, currency());
+    await downloadWorkbook(wb, "neraca.xlsx");
+    showToast("Neraca berhasil diekspor.", "success");
+  } catch (e) { console.error(e); showToast("Gagal membuat file Excel: " + e.message, "danger"); }
+}
+async function exportFullCycle() {
+  try {
+    const wb = new ExcelJS.Workbook();
+    const cur = currency();
+    const dates = state.journal.map(r => r.date);
+    const inception = dates.reduce((a,b)=>a<b?a:b), latest = dates.reduce((a,b)=>a>b?a:b);
+
+    xlGenerateJournal(wb, journalGroups(state.journal), cur, "Jurnal Umum");
+    xlGenerateAllLedgers(wb, cur, "Buku Besar");
+    const tb = computeTrialBalance(state.coa, state.journal, latest);
+    xlGenerateTrialBalance(wb, tb, latest, cur, "Neraca Saldo");
+    const income = computeIncomeStatement(state.coa, state.journal, inception, latest);
+    xlGenerateIncomeStatement(wb, income, inception, latest, cur, "Laba Rugi");
+    const equity = computeOwnersEquity(state.coa, state.journal, inception, latest, income.netIncome);
+    xlGenerateOwnersEquity(wb, equity, inception, latest, cur, "Perubahan Modal");
+    const bs = computeBalanceSheet(state.coa, state.journal, latest, equity.endingCapital);
+    xlGenerateBalanceSheet(wb, bs, latest, cur, "Neraca");
+
+    await downloadWorkbook(wb, `siklus_akuntansi_${latest}.xlsx`);
+    showToast("Buku kerja lengkap berhasil diunduh.", "success");
+  } catch (e) { console.error(e); showToast("Gagal membuat file Excel: " + e.message, "danger"); }
+}
+
+// ============================================================================
+// BACKUP — export/import raw JSON (coa + journal + settings)
+// ============================================================================
+function backupExport() {
+  const payload = { version: 1, exportedAt: new Date().toISOString(), coa: state.coa, journal: state.journal, settings: state.settings };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  saveBlob(blob, `cadangan_akuntansi_${todayISO()}.json`);
+  showToast("File cadangan diunduh.", "success");
+}
+function backupImportTrigger() { document.getElementById("import-file-input").click(); }
+function backupImportFile(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    let data;
+    try { data = JSON.parse(e.target.result); }
+    catch (err) { showToast("File tidak valid — bukan file cadangan JSON.", "danger"); return; }
+    if (!data || typeof data !== "object" || !data.coa || !Array.isArray(data.journal)) {
+      showToast("Struktur file cadangan tidak dikenali.", "danger"); return;
+    }
+    openModal({
+      title: "Pulihkan dari cadangan?",
+      body: "Ini akan menimpa semua data yang ada saat ini di peramban ini (Kode Akun, Jurnal, Pengaturan) dengan isi file cadangan. Tindakan ini tidak bisa dibatalkan.",
+      actions: [
+        { label: "Batal" },
+        { label: "Ya, pulihkan", variant: "primary", onClick: () => {
+          state.coa = data.coa;
+          state.journal = data.journal;
+          state.settings = data.settings || { currency: "Rp" };
+          persistCOA(); persistJournal(); persistSettings();
+          state.vjFilters = { start: null, end: null, accounts: [] };
+          state.fsRange = { start: null, end: null };
+          state.tbAsOf = null;
+          showToast("Data berhasil dipulihkan dari cadangan.", "success");
+          renderPage();
+        }},
+      ],
+    });
+  };
+  reader.readAsText(file);
+}
+
+
+// ============================================================================
+// TRANSACTION POSTING
+// ============================================================================
+function postTransaction() {
+  const entries = state.entryDraft.map(e => ({ ...e, debit: Number(e.debit) || 0, credit: Number(e.credit) || 0 }));
+  const v = validateTransaction(entries);
+  if (!v.isValid) { showToast(v.message, "danger"); return; }
+  const tid = "TX-" + uid(6).toUpperCase();
+  const date = state.entryDate || todayISO();
+  entries.forEach((e) => {
+    if (e.debit <= 0 && e.credit <= 0) return;
+    state.journal.push({
+      date, transaction_id: tid, line_id: uid(10),
+      account_title: accountName(state.coa, e.account), post_ref: e.account,
+      explanation: e.explanation || "", debit: e.debit, credit: e.credit,
+    });
+  });
+  persistJournal();
+  showToast("Transaksi berhasil diposting ✅", "success");
+  state.entryDate = date;
+  initEntryDraft(state.entryLines);
+  renderPage();
+}
+function clearForm() {
+  initEntryDraft(state.entryLines);
+  state.entryDate = todayISO();
+  renderPage();
+}
+function deleteTxnBtnClick() {
+  const sel = document.getElementById("vj-del-select");
+  if (!sel || !sel.value) return;
+  const tid = sel.value;
+  openModal({
+    title: "Hapus transaksi ini?",
+    body: "Kedua sisi (Debit & Kredit) transaksi ini akan dihapus sekaligus, agar buku besar tetap seimbang.",
+    actions: [{ label: "Batal" }, { label: "Ya, hapus", variant: "danger", onClick: () => deleteTransaction(tid) }],
+  });
+}
+function clearAllBtnClick() {
+  openModal({
+    title: "Hapus SEMUA transaksi?",
+    body: "Seluruh jurnal akan dikosongkan. Kode Akun tidak ikut terhapus. Tindakan ini tidak bisa dibatalkan — pertimbangkan mengunduh cadangan terlebih dahulu di menu Ekspor & Backup.",
+    actions: [{ label: "Batal" }, { label: "Ya, hapus semua", variant: "danger", onClick: clearAllJournal }],
+  });
+}
+
+// ============================================================================
+// GLOBAL EVENT DELEGATION — content inside #page-content is re-rendered
+// often, so we bind once on document and dispatch by data-action rather than
+// re-binding after every render.
+// ============================================================================
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("[data-action]");
+  if (!t) return;
+  const action = t.dataset.action;
+  switch (action) {
+    case "post-txn": postTransaction(); break;
+    case "clear-form": clearForm(); break;
+    case "edit-line-row": editLineRow(t.dataset.lineId); break;
+    case "save-line-row": saveLineRow(t.dataset.lineId); break;
+    case "export-journal-xlsx": exportJournalXlsx(); break;
+    case "delete-txn-btn": deleteTxnBtnClick(); break;
+    case "clear-all-btn": clearAllBtnClick(); break;
+    case "export-ledger-xlsx": exportLedgerXlsx(); break;
+    case "export-tb-xlsx": exportTbXlsx(); break;
+    case "fs-tab": state.fsTab = t.dataset.tab; renderPage(); break;
+    case "export-income-xlsx": exportIncomeXlsx(); break;
+    case "export-equity-xlsx": exportEquityXlsx(); break;
+    case "export-bs-xlsx": exportBsXlsx(); break;
+    case "coa-tab": state.coaTab = t.dataset.tab; state.editingAcct = null; renderPage(); break;
+    case "coa-add-submit": coaAddSubmit(); break;
+    case "coa-edit-submit": coaEditSubmit(); break;
+    case "coa-remove-submit": coaRemoveSubmit(t.dataset.code); break;
+    case "export-full-cycle": exportFullCycle(); break;
+    case "backup-export": backupExport(); break;
+    case "backup-import-btn": backupImportTrigger(); break;
+  }
+});
+
+document.addEventListener("input", (e) => {
+  const t = e.target;
+  if (t.dataset && t.dataset.action) {
+    const idx = Number(t.dataset.idx);
+    if (t.dataset.action === "line-debit") { state.entryDraft[idx].debit = t.value; updateTape(); }
+    else if (t.dataset.action === "line-credit") { state.entryDraft[idx].credit = t.value; updateTape(); }
+    else if (t.dataset.action === "line-expl") { state.entryDraft[idx].explanation = t.value; }
+  }
+});
+document.addEventListener("change", (e) => {
+  const t = e.target;
+  if (t.dataset && t.dataset.action === "line-account") {
+    state.entryDraft[Number(t.dataset.idx)].account = t.value;
+  }
+  if (t.id === "import-file-input" && t.files && t.files[0]) {
+    backupImportFile(t.files[0]);
+    t.value = "";
+  }
+});
+
+document.querySelectorAll(".nav-btn").forEach(b => b.addEventListener("click", () => navigate(b.dataset.nav)));
+document.querySelectorAll(".currency-toggle button").forEach(b => b.addEventListener("click", () => {
+  state.settings.currency = b.dataset.currency;
+  persistSettings();
+  renderPage();
+}));
+document.getElementById("hamburger").addEventListener("click", openSidebarMobile);
+document.getElementById("sidebar-overlay").addEventListener("click", closeSidebarMobile);
+
+// ============================================================================
+// BOOT
+// ============================================================================
+loadState();
+document.querySelector(`.nav-btn[data-nav="${state.nav}"]`).classList.add("active");
+renderPage();
+if (!Store.available) {
+  showToast("⚠ Penyimpanan lokal peramban tidak tersedia (mode private/incognito?). Data tidak akan tersimpan setelah halaman ditutup.", "danger");
+}
+</script>
+</body>
+</html>
