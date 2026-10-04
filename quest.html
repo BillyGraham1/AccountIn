@@ -1,0 +1,1684 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Accolingo - Game Belajar Akuntansi</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📊</text></svg>" />
+
+<!-- Tailwind (Play CDN) -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!-- Import map: React, ReactDOM, lucide-react semua lewat ESM CDN -->
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.3.1",
+    "react-dom": "https://esm.sh/react-dom@18.3.1",
+    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+    "lucide-react": "https://esm.sh/lucide-react@0.462.0?external=react,react-dom"
+  }
+}
+</script>
+<script async src="https://esm.sh/es-module-shims@1.10.0/dist/es-module-shims.js"></script>
+
+<!-- Babel standalone: transpile JSX di browser -->
+<script src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"></script>
+
+<style>
+  html, body { margin: 0; padding: 0; }
+  #root { min-height: 100vh; }
+
+  /* Pendekatan untuk kelas utilitas ala tailwindcss-animate yang dipakai di kode asli */
+  .animate-in { animation-duration: 300ms; animation-fill-mode: both; animation-timing-function: ease-out; }
+  .fade-in { animation-name: acco-fadein; }
+  .zoom-in { animation-name: acco-zoomin; }
+  .slide-in-from-right { animation-name: acco-slide-right; }
+  .slide-in-from-bottom-2 { animation-name: acco-slide-bottom; }
+  .duration-200 { animation-duration: 200ms; }
+  .duration-300 { animation-duration: 300ms; }
+  .duration-500 { animation-duration: 500ms; }
+
+  @keyframes acco-fadein { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes acco-zoomin { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+  @keyframes acco-slide-right { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: translateX(0); } }
+  @keyframes acco-slide-bottom { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+<div id="root">
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:sans-serif;color:#6b7280;">
+    Memuat AccountIn Quest…
+  </div>
+</div>
+
+<script type="text/babel" data-type="module" data-presets="react">
+import React, { useState, useEffect, useMemo } from 'react';
+import ReactDOM from 'react-dom/client';
+import {
+  BookOpen, Heart, ShieldAlert, CheckCircle2, ChevronRight, ArrowRight, ArrowLeft, Lightbulb,
+  TrendingUp, FileText, Briefcase, ShoppingCart, Factory, Sparkles, ArrowDown, ChevronDown,
+  X, Eye, Clock, Award, Rocket, Info, ListChecks, BarChart3, Layers, Coins,
+} from 'lucide-react';
+
+
+/* ============================================================================================
+   FORMAT HELPERS
+   ============================================================================================ */
+
+const fmtRp = (n) => `Rp ${Number(n || 0).toLocaleString('id-ID')}`;
+
+const fmtCountdown = (ms) => {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+};
+
+/* ============================================================================================
+   ACCOUNT REFERENCE DATA
+   Every account the game knows about, plus how it behaves on the financial statements.
+   `group` drives hint copy, `statement`/`side` decide where it's placed, `sign` decides whether
+   it adds to or subtracts from that side's total (contra accounts subtract).
+   ============================================================================================ */
+
+const ACCOUNT_OPTIONS = [
+  "Pilih Akun...", "Kas", "Piutang Usaha", "Perlengkapan", "Peralatan", "Mesin Pabrik", "Akumulasi Penyusutan",
+  "Utang Usaha", "Utang Bank", "Modal", "Prive",
+  "Pendapatan Jasa", "Beban Sewa", "Beban Gaji", "Beban Listrik",
+  "Persediaan Barang Dagang", "Pembelian", "Retur Pembelian", "Potongan Pembelian", "Beban Angkut Pembelian",
+  "Penjualan", "Retur Penjualan", "Potongan Penjualan", "Harga Pokok Penjualan",
+  "Persediaan Bahan Baku", "Barang Dalam Proses", "Barang Jadi", "Biaya Tenaga Kerja", "BOP Sesungguhnya", "BOP Dibebankan"
+];
+
+const meta = (group, statement, side, sign) => ({ group, statement, side, sign });
+
+const ACCOUNTS_META = {
+  'Kas': meta('aset', 'neraca', 'kiri', 1),
+  'Piutang Usaha': meta('aset', 'neraca', 'kiri', 1),
+  'Perlengkapan': meta('aset', 'neraca', 'kiri', 1),
+  'Peralatan': meta('aset', 'neraca', 'kiri', 1),
+  'Mesin Pabrik': meta('aset', 'neraca', 'kiri', 1),
+  'Akumulasi Penyusutan': meta('aset-kontra', 'neraca', 'kiri', -1),
+  'Utang Usaha': meta('liabilitas', 'neraca', 'kanan', 1),
+  'Utang Bank': meta('liabilitas', 'neraca', 'kanan', 1),
+  'Modal': meta('ekuitas', 'neraca', 'kanan', 1),
+  'Prive': meta('ekuitas-kontra', 'neraca', 'kanan', -1),
+  'Pendapatan Jasa': meta('pendapatan', 'labarugi', 'kiri', 1),
+  'Beban Sewa': meta('beban', 'labarugi', 'kanan', 1),
+  'Beban Gaji': meta('beban', 'labarugi', 'kanan', 1),
+  'Beban Listrik': meta('beban', 'labarugi', 'kanan', 1),
+  'Persediaan Barang Dagang': meta('aset', 'neraca', 'kiri', 1),
+  'Pembelian': meta('beban', 'labarugi', 'kanan', 1),
+  'Retur Pembelian': meta('beban-kontra', 'labarugi', 'kanan', -1),
+  'Potongan Pembelian': meta('beban-kontra', 'labarugi', 'kanan', -1),
+  'Beban Angkut Pembelian': meta('beban', 'labarugi', 'kanan', 1),
+  'Penjualan': meta('pendapatan', 'labarugi', 'kiri', 1),
+  'Retur Penjualan': meta('pendapatan-kontra', 'labarugi', 'kiri', -1),
+  'Potongan Penjualan': meta('pendapatan-kontra', 'labarugi', 'kiri', -1),
+  'Harga Pokok Penjualan': meta('beban', 'labarugi', 'kanan', 1),
+  'Persediaan Bahan Baku': meta('aset', 'neraca', 'kiri', 1),
+  'Barang Dalam Proses': meta('aset', 'neraca', 'kiri', 1),
+  'Barang Jadi': meta('aset', 'neraca', 'kiri', 1),
+  'Biaya Tenaga Kerja': meta('beban', 'labarugi', 'kanan', 1),
+  'BOP Sesungguhnya': meta('clearing', 'none', null, 1),
+  'BOP Dibebankan': meta('clearing', 'none', null, 1),
+};
+
+const GROUP_LABEL = {
+  'aset': 'ASET', 'aset-kontra': 'pengurang ASET',
+  'liabilitas': 'LIABILITAS', 'ekuitas': 'EKUITAS', 'ekuitas-kontra': 'pengurang EKUITAS',
+  'pendapatan': 'PENDAPATAN', 'pendapatan-kontra': 'pengurang PENDAPATAN',
+  'beban': 'BEBAN / HARGA POKOK', 'beban-kontra': 'pengurang BEBAN / HARGA POKOK',
+};
+
+function explainAccount(account) {
+  const m = ACCOUNTS_META[account];
+  if (!m) return { soft: '', explicit: '' };
+  const label = GROUP_LABEL[m.group] || m.group;
+  const columnWord = m.side === 'kiri' ? 'KIRI' : 'KANAN';
+  const isContra = m.group.endsWith('kontra');
+  const soft = isContra
+    ? `"${account}" termasuk ${label}. Ia tetap ditulis di kolom ${columnWord}, tapi nilainya justru MENGURANGI total kolom itu.`
+    : `"${account}" termasuk kelompok ${label}, jadi selalu diletakkan di kolom ${columnWord}.`;
+  const explicit = `Ambil angkanya langsung dari Neraca Saldo yang sudah kamu isi sebelumnya — jangan dihitung ulang dari awal.`;
+  return { soft, explicit };
+}
+
+/* ============================================================================================
+   TRANSACTION BANKS
+   Each category has a `bank` (10 transactions, one new concept per level, cumulative — Level N
+   replays transactions 1..N) and an `examBank` (a smaller fresh company for the boss exam, same
+   concepts, different numbers, so memorized answers don't help).
+   ============================================================================================ */
+
+const TX_JASA = [
+  { title: "Setoran Modal", text: "Tuan Budi menyetorkan uang tunai Rp 10.000.000 sebagai modal awal bengkel 'Budi Motor'.",
+    hint: "Kas yang masuk selalu dicatat di Debit. Modal yang bertambah dicatat di Kredit.",
+    hint2: "Jurnalnya: (D) Kas Rp10.000.000 — (K) Modal Rp10.000.000.",
+    entries: [{ type: 'debit', account: 'Kas', amount: 10000000 }, { type: 'credit', account: 'Modal', amount: 10000000 }] },
+  { title: "Beli Peralatan Tunai", text: "Bengkel membeli Peralatan bengkel secara tunai Rp 2.000.000.",
+    hint: "Peralatan adalah aset baru yang masuk (Debit). Kas berkurang karena dibayar tunai (Kredit).",
+    hint2: "Jurnalnya: (D) Peralatan Rp2.000.000 — (K) Kas Rp2.000.000.",
+    entries: [{ type: 'debit', account: 'Peralatan', amount: 2000000 }, { type: 'credit', account: 'Kas', amount: 2000000 }] },
+  { title: "Beli Perlengkapan Kredit", text: "Dibeli Perlengkapan bengkel Rp 1.000.000 secara kredit (belum dibayar).",
+    hint: "Perlengkapan bertambah (Debit). Karena belum dibayar, timbul kewajiban Utang Usaha (Kredit).",
+    hint2: "Jurnalnya: (D) Perlengkapan Rp1.000.000 — (K) Utang Usaha Rp1.000.000.",
+    entries: [{ type: 'debit', account: 'Perlengkapan', amount: 1000000 }, { type: 'credit', account: 'Utang Usaha', amount: 1000000 }] },
+  { title: "Pendapatan Jasa Tunai", text: "Diterima pendapatan jasa servis motor secara tunai Rp 5.000.000.",
+    hint: "Uang tunai masuk ke Kas (Debit). Sumbernya adalah Pendapatan Jasa (Kredit).",
+    hint2: "Jurnalnya: (D) Kas Rp5.000.000 — (K) Pendapatan Jasa Rp5.000.000.",
+    entries: [{ type: 'debit', account: 'Kas', amount: 5000000 }, { type: 'credit', account: 'Pendapatan Jasa', amount: 5000000 }] },
+  { title: "Bayar Beban Gaji", text: "Dibayar beban gaji karyawan bulan ini secara tunai Rp 1.500.000.",
+    hint: "Beban selalu dicatat di Debit (mengurangi laba). Kas berkurang di Kredit.",
+    hint2: "Jurnalnya: (D) Beban Gaji Rp1.500.000 — (K) Kas Rp1.500.000.",
+    entries: [{ type: 'debit', account: 'Beban Gaji', amount: 1500000 }, { type: 'credit', account: 'Kas', amount: 1500000 }] },
+  { title: "Piutang Jasa", text: "Diselesaikan jasa servis senilai Rp 3.000.000, namun pelanggan belum membayar (kredit).",
+    hint: "Karena belum dibayar, timbul hak tagih berupa Piutang Usaha (Debit). Pendapatan tetap diakui (Kredit).",
+    hint2: "Jurnalnya: (D) Piutang Usaha Rp3.000.000 — (K) Pendapatan Jasa Rp3.000.000.",
+    entries: [{ type: 'debit', account: 'Piutang Usaha', amount: 3000000 }, { type: 'credit', account: 'Pendapatan Jasa', amount: 3000000 }] },
+  { title: "Terima Pelunasan Piutang", text: "Diterima pelunasan piutang dari pelanggan atas jasa sebelumnya Rp 3.000.000.",
+    hint: "Kas bertambah (Debit). Piutang Usaha berkurang karena sudah dilunasi (Kredit).",
+    hint2: "Jurnalnya: (D) Kas Rp3.000.000 — (K) Piutang Usaha Rp3.000.000.",
+    entries: [{ type: 'debit', account: 'Kas', amount: 3000000 }, { type: 'credit', account: 'Piutang Usaha', amount: 3000000 }] },
+  { title: "Bayar Sebagian Utang", text: "Dibayar sebagian utang usaha atas pembelian perlengkapan Rp 500.000 secara tunai.",
+    hint: "Utang Usaha berkurang (Debit). Kas berkurang karena dipakai membayar (Kredit).",
+    hint2: "Jurnalnya: (D) Utang Usaha Rp500.000 — (K) Kas Rp500.000.",
+    entries: [{ type: 'debit', account: 'Utang Usaha', amount: 500000 }, { type: 'credit', account: 'Kas', amount: 500000 }] },
+  { title: "Pengambilan Prive", text: "Tuan Budi mengambil uang kas perusahaan Rp 1.000.000 untuk keperluan pribadi (Prive).",
+    hint: "Prive mengurangi modal pemilik, dicatat di Debit. Kas yang keluar dicatat di Kredit.",
+    hint2: "Jurnalnya: (D) Prive Rp1.000.000 — (K) Kas Rp1.000.000.",
+    entries: [{ type: 'debit', account: 'Prive', amount: 1000000 }, { type: 'credit', account: 'Kas', amount: 1000000 }] },
+  { title: "Bayar Beban Sewa", text: "Dibayar biaya sewa ruko bulan ini secara tunai Rp 2.500.000.",
+    hint: "Sama seperti beban gaji: Beban di Debit, Kas berkurang di Kredit.",
+    hint2: "Jurnalnya: (D) Beban Sewa Rp2.500.000 — (K) Kas Rp2.500.000.",
+    entries: [{ type: 'debit', account: 'Beban Sewa', amount: 2500000 }, { type: 'credit', account: 'Kas', amount: 2500000 }] },
+];
+
+const EXAM_JASA = [
+  { title: "Modal Awal", text: "Nona Sari menyetorkan uang tunai Rp 12.000.000 sebagai modal awal Laundry 'Fajar Bersih'.",
+    hint: "Kas bertambah (Debit), Modal bertambah (Kredit).", hint2: "(D) Kas Rp12.000.000 — (K) Modal Rp12.000.000.",
+    entries: [{ type: 'debit', account: 'Kas', amount: 12000000 }, { type: 'credit', account: 'Modal', amount: 12000000 }] },
+  { title: "Beli Peralatan", text: "Dibeli Peralatan cuci secara tunai Rp 3.000.000.",
+    hint: "Peralatan bertambah (Debit), Kas berkurang (Kredit).", hint2: "(D) Peralatan Rp3.000.000 — (K) Kas Rp3.000.000.",
+    entries: [{ type: 'debit', account: 'Peralatan', amount: 3000000 }, { type: 'credit', account: 'Kas', amount: 3000000 }] },
+  { title: "Beli Perlengkapan Kredit", text: "Dibeli Perlengkapan (deterjen, pewangi) Rp 800.000 secara kredit.",
+    hint: "Perlengkapan bertambah (Debit), timbul Utang Usaha (Kredit).", hint2: "(D) Perlengkapan Rp800.000 — (K) Utang Usaha Rp800.000.",
+    entries: [{ type: 'debit', account: 'Perlengkapan', amount: 800000 }, { type: 'credit', account: 'Utang Usaha', amount: 800000 }] },
+  { title: "Pendapatan Jasa", text: "Diterima pendapatan jasa cuci-setrika tunai Rp 4.500.000.",
+    hint: "Kas bertambah (Debit), Pendapatan Jasa bertambah (Kredit).", hint2: "(D) Kas Rp4.500.000 — (K) Pendapatan Jasa Rp4.500.000.",
+    entries: [{ type: 'debit', account: 'Kas', amount: 4500000 }, { type: 'credit', account: 'Pendapatan Jasa', amount: 4500000 }] },
+  { title: "Bayar Beban Gaji", text: "Dibayar gaji karyawan tunai Rp 1.200.000.",
+    hint: "Beban di Debit, Kas berkurang di Kredit.", hint2: "(D) Beban Gaji Rp1.200.000 — (K) Kas Rp1.200.000.",
+    entries: [{ type: 'debit', account: 'Beban Gaji', amount: 1200000 }, { type: 'credit', account: 'Kas', amount: 1200000 }] },
+  { title: "Pengambilan Prive", text: "Nona Sari mengambil kas usaha Rp 500.000 untuk kebutuhan pribadi.",
+    hint: "Prive di Debit (mengurangi modal), Kas di Kredit.", hint2: "(D) Prive Rp500.000 — (K) Kas Rp500.000.",
+    entries: [{ type: 'debit', account: 'Prive', amount: 500000 }, { type: 'credit', account: 'Kas', amount: 500000 }] },
+];
+
+const TX_DAGANG = [
+  { title: "Setoran Modal", text: "Toko 'Makmur Jaya' menyetorkan uang tunai Rp 20.000.000 sebagai modal awal.",
+    hint: "Kas bertambah (Debit). Modal bertambah (Kredit).", hint2: "Jurnalnya: (D) Kas Rp20.000.000 — (K) Modal Rp20.000.000.",
+    entries: [{ type: 'debit', account: 'Kas', amount: 20000000 }, { type: 'credit', account: 'Modal', amount: 20000000 }] },
+  { title: "Pembelian Tunai", text: "Toko membeli barang dagangan secara tunai Rp 4.000.000.",
+    hint: "Dalam sistem periodik, barang yang dibeli dicatat di akun Pembelian (Debit), bukan langsung ke Persediaan.",
+    hint2: "Jurnalnya: (D) Pembelian Rp4.000.000 — (K) Kas Rp4.000.000.",
+    entries: [{ type: 'debit', account: 'Pembelian', amount: 4000000 }, { type: 'credit', account: 'Kas', amount: 4000000 }] },
+  { title: "Pembelian Kredit", text: "Toko membeli barang dagangan Rp 6.000.000 secara kredit.",
+    hint: "Pembelian bertambah (Debit). Karena kredit, timbul Utang Usaha (Kredit).",
+    hint2: "Jurnalnya: (D) Pembelian Rp6.000.000 — (K) Utang Usaha Rp6.000.000.",
+    entries: [{ type: 'debit', account: 'Pembelian', amount: 6000000 }, { type: 'credit', account: 'Utang Usaha', amount: 6000000 }] },
+  { title: "Beban Angkut Pembelian", text: "Dibayar tunai ongkos kirim atas barang yang baru dibeli Rp 200.000.",
+    hint: "Ongkos angkut pembelian dicatat sebagai Beban Angkut Pembelian (Debit), mengurangi Kas (Kredit).",
+    hint2: "Jurnalnya: (D) Beban Angkut Pembelian Rp200.000 — (K) Kas Rp200.000.",
+    entries: [{ type: 'debit', account: 'Beban Angkut Pembelian', amount: 200000 }, { type: 'credit', account: 'Kas', amount: 200000 }] },
+  { title: "Retur Pembelian", text: "Dikembalikan sebagian barang yang dibeli secara kredit karena cacat, senilai Rp 500.000.",
+    hint: "Utang Usaha berkurang (Debit) karena barang dikembalikan. Catat di Retur Pembelian (Kredit).",
+    hint2: "Jurnalnya: (D) Utang Usaha Rp500.000 — (K) Retur Pembelian Rp500.000.",
+    entries: [{ type: 'debit', account: 'Utang Usaha', amount: 500000 }, { type: 'credit', account: 'Retur Pembelian', amount: 500000 }] },
+  { title: "Penjualan Tunai", text: "Terjual barang dagangan secara tunai Rp 7.000.000.",
+    hint: "Kas bertambah (Debit). Catat sebagai Penjualan (Kredit).", hint2: "Jurnalnya: (D) Kas Rp7.000.000 — (K) Penjualan Rp7.000.000.",
+    entries: [{ type: 'debit', account: 'Kas', amount: 7000000 }, { type: 'credit', account: 'Penjualan', amount: 7000000 }] },
+  { title: "Penjualan Kredit", text: "Dijual barang dagangan secara kredit Rp 8.000.000.",
+    hint: "Karena kredit, hak tagih dicatat sebagai Piutang Usaha (Debit). Penjualan tetap diakui penuh (Kredit).",
+    hint2: "Jurnalnya: (D) Piutang Usaha Rp8.000.000 — (K) Penjualan Rp8.000.000.",
+    entries: [{ type: 'debit', account: 'Piutang Usaha', amount: 8000000 }, { type: 'credit', account: 'Penjualan', amount: 8000000 }] },
+  { title: "Retur Penjualan", text: "Diterima kembali barang dari pelanggan karena cacat senilai Rp 1.000.000 (barang tsb sebelumnya dijual kredit).",
+    hint: "Retur Penjualan mengurangi hasil jual (Debit). Piutang Usaha berkurang (Kredit).",
+    hint2: "Jurnalnya: (D) Retur Penjualan Rp1.000.000 — (K) Piutang Usaha Rp1.000.000.",
+    entries: [{ type: 'debit', account: 'Retur Penjualan', amount: 1000000 }, { type: 'credit', account: 'Piutang Usaha', amount: 1000000 }] },
+  { title: "Bayar Utang dengan Potongan", text: "Dibayar utang usaha Rp 5.500.000, mendapat potongan Rp 100.000 sehingga kas yang dibayar Rp 5.400.000.",
+    hint: "Utang Usaha lunas penuh (Debit sebesar Rp5.500.000). Kas keluar (Kredit) hanya sebesar yang benar-benar dibayar, dan selisihnya dicatat sebagai Potongan Pembelian (Kredit).",
+    hint2: "Jurnalnya: (D) Utang Usaha Rp5.500.000 — (K) Kas Rp5.400.000 — (K) Potongan Pembelian Rp100.000.",
+    entries: [{ type: 'debit', account: 'Utang Usaha', amount: 5500000 }, { type: 'credit', account: 'Kas', amount: 5400000 }, { type: 'credit', account: 'Potongan Pembelian', amount: 100000 }] },
+  { title: "Terima Pelunasan dengan Potongan", text: "Diterima pelunasan piutang Rp 7.000.000 dengan memberi Potongan Penjualan Rp 200.000, sehingga kas yang diterima Rp 6.800.000.",
+    hint: "Kas yang benar-benar diterima (Debit) dan Potongan Penjualan yang diberikan (Debit) totalnya harus sama dengan Piutang Usaha yang dihapus (Kredit).",
+    hint2: "Jurnalnya: (D) Kas Rp6.800.000 — (D) Potongan Penjualan Rp200.000 — (K) Piutang Usaha Rp7.000.000.",
+    entries: [{ type: 'debit', account: 'Kas', amount: 6800000 }, { type: 'debit', account: 'Potongan Penjualan', amount: 200000 }, { type: 'credit', account: 'Piutang Usaha', amount: 7000000 }] },
+];
+
+const EXAM_DAGANG = [
+  { title: "Setoran Modal", text: "Toko 'Sinar Abadi' menyetorkan uang tunai Rp 25.000.000 sebagai modal awal.",
+    hint: "Kas (Debit), Modal (Kredit).", hint2: "(D) Kas Rp25.000.000 — (K) Modal Rp25.000.000.",
+    entries: [{ type: 'debit', account: 'Kas', amount: 25000000 }, { type: 'credit', account: 'Modal', amount: 25000000 }] },
+  { title: "Pembelian Tunai", text: "Dibeli barang dagangan secara tunai Rp 6.000.000.",
+    hint: "Pembelian (Debit), Kas berkurang (Kredit).", hint2: "(D) Pembelian Rp6.000.000 — (K) Kas Rp6.000.000.",
+    entries: [{ type: 'debit', account: 'Pembelian', amount: 6000000 }, { type: 'credit', account: 'Kas', amount: 6000000 }] },
+  { title: "Pembelian Kredit", text: "Dibeli barang dagangan Rp 4.000.000 secara kredit.",
+    hint: "Pembelian (Debit), timbul Utang Usaha (Kredit).", hint2: "(D) Pembelian Rp4.000.000 — (K) Utang Usaha Rp4.000.000.",
+    entries: [{ type: 'debit', account: 'Pembelian', amount: 4000000 }, { type: 'credit', account: 'Utang Usaha', amount: 4000000 }] },
+  { title: "Retur Pembelian", text: "Dikembalikan barang yang dibeli kredit karena cacat senilai Rp 600.000.",
+    hint: "Utang Usaha berkurang (Debit), catat Retur Pembelian (Kredit).", hint2: "(D) Utang Usaha Rp600.000 — (K) Retur Pembelian Rp600.000.",
+    entries: [{ type: 'debit', account: 'Utang Usaha', amount: 600000 }, { type: 'credit', account: 'Retur Pembelian', amount: 600000 }] },
+  { title: "Penjualan Tunai", text: "Terjual barang dagangan secara tunai Rp 9.000.000.",
+    hint: "Kas bertambah (Debit), Penjualan (Kredit).", hint2: "(D) Kas Rp9.000.000 — (K) Penjualan Rp9.000.000.",
+    entries: [{ type: 'debit', account: 'Kas', amount: 9000000 }, { type: 'credit', account: 'Penjualan', amount: 9000000 }] },
+  { title: "Penjualan Kredit", text: "Dijual barang dagangan secara kredit Rp 5.000.000.",
+    hint: "Piutang Usaha (Debit), Penjualan (Kredit).", hint2: "(D) Piutang Usaha Rp5.000.000 — (K) Penjualan Rp5.000.000.",
+    entries: [{ type: 'debit', account: 'Piutang Usaha', amount: 5000000 }, { type: 'credit', account: 'Penjualan', amount: 5000000 }] },
+];
+
+const TX_MANUFAKTUR = [
+  { title: "Setoran Modal & Beli Bahan Baku", text: "Pabrik 'Karya Logam' menyetorkan modal kas Rp 100.000.000, lalu langsung membeli Bahan Baku secara tunai Rp 15.000.000.",
+    hint: "Ini transaksi ganda: dua peristiwa dicatat sekaligus. Pertama modal masuk, kedua bahan baku dibeli tunai.",
+    hint2: "Jurnalnya: (D) Kas Rp100.000.000 — (K) Modal Rp100.000.000, lalu (D) Persediaan Bahan Baku Rp15.000.000 — (K) Kas Rp15.000.000.",
+    entries: [
+      { type: 'debit', account: 'Kas', amount: 100000000 }, { type: 'credit', account: 'Modal', amount: 100000000 },
+      { type: 'debit', account: 'Persediaan Bahan Baku', amount: 15000000 }, { type: 'credit', account: 'Kas', amount: 15000000 },
+    ] },
+  { title: "Pemakaian Bahan Baku", text: "Bahan Baku senilai Rp 8.000.000 dimasukkan ke proses produksi.",
+    hint: "Nilai bahan yang dipakai berpindah menjadi Barang Dalam Proses (Debit), Persediaan Bahan Baku berkurang (Kredit).",
+    hint2: "Jurnalnya: (D) Barang Dalam Proses Rp8.000.000 — (K) Persediaan Bahan Baku Rp8.000.000.",
+    entries: [{ type: 'debit', account: 'Barang Dalam Proses', amount: 8000000 }, { type: 'credit', account: 'Persediaan Bahan Baku', amount: 8000000 }] },
+  { title: "Tenaga Kerja Langsung", text: "Diakui biaya gaji buruh pabrik (Tenaga Kerja Langsung) Rp 5.000.000, dibayar tunai.",
+    hint: "Upah buruh produksi langsung menambah nilai Barang Dalam Proses (Debit). Kas berkurang (Kredit).",
+    hint2: "Jurnalnya: (D) Barang Dalam Proses Rp5.000.000 — (K) Kas Rp5.000.000.",
+    entries: [{ type: 'debit', account: 'Barang Dalam Proses', amount: 5000000 }, { type: 'credit', account: 'Kas', amount: 5000000 }] },
+  { title: "BOP Sesungguhnya", text: "Dibayar tunai biaya listrik dan air pabrik Rp 2.000.000.",
+    hint: "Biaya pabrik tidak langsung dicatat sebagai BOP Sesungguhnya (Debit). Kas berkurang (Kredit).",
+    hint2: "Jurnalnya: (D) BOP Sesungguhnya Rp2.000.000 — (K) Kas Rp2.000.000.",
+    entries: [{ type: 'debit', account: 'BOP Sesungguhnya', amount: 2000000 }, { type: 'credit', account: 'Kas', amount: 2000000 }] },
+  { title: "Alokasi BOP ke BDP", text: "Dialokasikan BOP Dibebankan ke Barang Dalam Proses senilai Rp 2.500.000.",
+    hint: "BOP yang dibebankan menambah nilai Barang Dalam Proses (Debit), lawannya BOP Dibebankan (Kredit).",
+    hint2: "Jurnalnya: (D) Barang Dalam Proses Rp2.500.000 — (K) BOP Dibebankan Rp2.500.000.",
+    entries: [{ type: 'debit', account: 'Barang Dalam Proses', amount: 2500000 }, { type: 'credit', account: 'BOP Dibebankan', amount: 2500000 }] },
+  { title: "Produk Selesai", text: "Produksi selesai. Barang Dalam Proses senilai Rp 15.500.000 dipindah ke gudang Barang Jadi.",
+    hint: "Aset baru Barang Jadi terbentuk (Debit). Barang Dalam Proses berkurang habis (Kredit).",
+    hint2: "Jurnalnya: (D) Barang Jadi Rp15.500.000 — (K) Barang Dalam Proses Rp15.500.000.",
+    entries: [{ type: 'debit', account: 'Barang Jadi', amount: 15500000 }, { type: 'credit', account: 'Barang Dalam Proses', amount: 15500000 }] },
+  { title: "Penjualan Produk Jadi", text: "Dijual Barang Jadi secara kredit seharga Rp 25.000.000.",
+    hint: "Karena kredit, dicatat sebagai Piutang Usaha (Debit). Penjualan diakui penuh (Kredit).",
+    hint2: "Jurnalnya: (D) Piutang Usaha Rp25.000.000 — (K) Penjualan Rp25.000.000.",
+    entries: [{ type: 'debit', account: 'Piutang Usaha', amount: 25000000 }, { type: 'credit', account: 'Penjualan', amount: 25000000 }] },
+  { title: "HPP Produk Terjual", text: "Dicatat Harga Pokok Penjualan atas Barang Jadi yang baru saja terjual sebesar Rp 15.500.000.",
+    hint: "Biaya produksi barang yang laku diakui sebagai HPP (Debit). Barang Jadi berkurang (Kredit).",
+    hint2: "Jurnalnya: (D) Harga Pokok Penjualan Rp15.500.000 — (K) Barang Jadi Rp15.500.000.",
+    entries: [{ type: 'debit', account: 'Harga Pokok Penjualan', amount: 15500000 }, { type: 'credit', account: 'Barang Jadi', amount: 15500000 }] },
+  { title: "Beli Mesin Pabrik", text: "Dibeli Mesin Pabrik secara kredit melalui Bank senilai Rp 50.000.000.",
+    hint: "Aset tetap baru: Mesin Pabrik (Debit). Kewajiban jangka panjang: Utang Bank (Kredit).",
+    hint2: "Jurnalnya: (D) Mesin Pabrik Rp50.000.000 — (K) Utang Bank Rp50.000.000.",
+    entries: [{ type: 'debit', account: 'Mesin Pabrik', amount: 50000000 }, { type: 'credit', account: 'Utang Bank', amount: 50000000 }] },
+  { title: "Penyusutan Mesin", text: "Di akhir periode, dicatat penyusutan Mesin Pabrik sebesar Rp 5.000.000 (masuk ke BOP).",
+    hint: "Penyusutan mesin pabrik termasuk BOP Sesungguhnya (Debit). Akumulasi Penyusutan bertambah (Kredit).",
+    hint2: "Jurnalnya: (D) BOP Sesungguhnya Rp5.000.000 — (K) Akumulasi Penyusutan Rp5.000.000.",
+    entries: [{ type: 'debit', account: 'BOP Sesungguhnya', amount: 5000000 }, { type: 'credit', account: 'Akumulasi Penyusutan', amount: 5000000 }] },
+];
+
+const EXAM_MANUFAKTUR = [
+  { title: "Modal & Beli Bahan Baku", text: "Pabrik 'Cahaya Logam' menyetorkan modal kas Rp 60.000.000, lalu membeli Bahan Baku tunai Rp 10.000.000.",
+    hint: "Dua peristiwa: modal masuk, lalu bahan baku dibeli tunai.",
+    hint2: "(D) Kas Rp60.000.000 — (K) Modal Rp60.000.000, lalu (D) Persediaan Bahan Baku Rp10.000.000 — (K) Kas Rp10.000.000.",
+    entries: [
+      { type: 'debit', account: 'Kas', amount: 60000000 }, { type: 'credit', account: 'Modal', amount: 60000000 },
+      { type: 'debit', account: 'Persediaan Bahan Baku', amount: 10000000 }, { type: 'credit', account: 'Kas', amount: 10000000 },
+    ] },
+  { title: "Pemakaian Bahan Baku", text: "Bahan Baku Rp 6.000.000 dimasukkan ke proses produksi.",
+    hint: "Barang Dalam Proses bertambah (Debit), Persediaan Bahan Baku berkurang (Kredit).",
+    hint2: "(D) Barang Dalam Proses Rp6.000.000 — (K) Persediaan Bahan Baku Rp6.000.000.",
+    entries: [{ type: 'debit', account: 'Barang Dalam Proses', amount: 6000000 }, { type: 'credit', account: 'Persediaan Bahan Baku', amount: 6000000 }] },
+  { title: "Tenaga Kerja Langsung", text: "Diakui upah buruh produksi Rp 4.000.000, dibayar tunai.",
+    hint: "Menambah Barang Dalam Proses (Debit), Kas berkurang (Kredit).",
+    hint2: "(D) Barang Dalam Proses Rp4.000.000 — (K) Kas Rp4.000.000.",
+    entries: [{ type: 'debit', account: 'Barang Dalam Proses', amount: 4000000 }, { type: 'credit', account: 'Kas', amount: 4000000 }] },
+  { title: "Produk Selesai", text: "Produksi selesai, Barang Dalam Proses Rp 10.000.000 dipindah ke gudang Barang Jadi.",
+    hint: "Barang Jadi terbentuk (Debit), Barang Dalam Proses habis (Kredit).",
+    hint2: "(D) Barang Jadi Rp10.000.000 — (K) Barang Dalam Proses Rp10.000.000.",
+    entries: [{ type: 'debit', account: 'Barang Jadi', amount: 10000000 }, { type: 'credit', account: 'Barang Dalam Proses', amount: 10000000 }] },
+  { title: "Penjualan Produk Jadi", text: "Dijual Barang Jadi secara kredit seharga Rp 18.000.000.",
+    hint: "Piutang Usaha (Debit), Penjualan (Kredit).", hint2: "(D) Piutang Usaha Rp18.000.000 — (K) Penjualan Rp18.000.000.",
+    entries: [{ type: 'debit', account: 'Piutang Usaha', amount: 18000000 }, { type: 'credit', account: 'Penjualan', amount: 18000000 }] },
+  { title: "HPP Produk Terjual", text: "Dicatat Harga Pokok Penjualan atas Barang Jadi yang terjual sebesar Rp 10.000.000.",
+    hint: "HPP diakui (Debit), Barang Jadi berkurang (Kredit).", hint2: "(D) Harga Pokok Penjualan Rp10.000.000 — (K) Barang Jadi Rp10.000.000.",
+    entries: [{ type: 'debit', account: 'Harga Pokok Penjualan', amount: 10000000 }, { type: 'credit', account: 'Barang Jadi', amount: 10000000 }] },
+];
+
+const CATEGORY_META = [
+  {
+    id: 'jasa', title: 'Perusahaan Jasa', desc: 'Menjual layanan/keahlian. Cocok untuk pemula.', icon: Briefcase,
+    colorClass: 'bg-blue-500', bgClass: 'bg-blue-50', borderClass: 'border-blue-200', textClass: 'text-blue-600', theme: 'blue',
+    bank: TX_JASA, examBank: EXAM_JASA,
+  },
+  {
+    id: 'dagang', title: 'Perusahaan Dagang', desc: 'Beli barang, simpan, dan jual kembali.', icon: ShoppingCart,
+    colorClass: 'bg-orange-500', bgClass: 'bg-orange-50', borderClass: 'border-orange-200', textClass: 'text-orange-600', theme: 'orange',
+    bank: TX_DAGANG, examBank: EXAM_DAGANG,
+  },
+  {
+    id: 'manufaktur', title: 'Perusahaan Manufaktur', desc: 'Olah bahan mentah jadi barang jadi.', icon: Factory,
+    colorClass: 'bg-purple-500', bgClass: 'bg-purple-50', borderClass: 'border-purple-200', textClass: 'text-purple-600', theme: 'purple',
+    bank: TX_MANUFAKTUR, examBank: EXAM_MANUFAKTUR,
+  },
+];
+
+/* ============================================================================================
+   DERIVATION ENGINE
+   Everything below is computed — not hand-typed — from the transaction bank. That means the
+   ledger, trial balance, and financial statement can never drift out of sync with the journal:
+   there's exactly one source of truth per level.
+   ============================================================================================ */
+
+function buildLevel(bank, n) {
+  const txs = bank.slice(0, n);
+
+  let flatIdx = 0;
+  const journalGroups = txs.map((tx, txIdx) => {
+    const rows = tx.entries.map((e) => ({ ...e, txIdx, flatIdx: flatIdx++ }));
+    return { txIdx, title: tx.title, text: tx.text, hint: tx.hint, hint2: tx.hint2, rows };
+  });
+  const journalFlat = journalGroups.flatMap((g) => g.rows);
+
+  const ledgerMap = new Map();
+  journalFlat.forEach((e) => {
+    if (!ledgerMap.has(e.account)) ledgerMap.set(e.account, { account: e.account, debit: 0, credit: 0, touchedBy: [] });
+    const rec = ledgerMap.get(e.account);
+    if (e.type === 'debit') rec.debit += e.amount; else rec.credit += e.amount;
+    rec.touchedBy.push(e.txIdx + 1);
+  });
+  const ledgerRows = Array.from(ledgerMap.values()).map((r) => ({ ...r, touchedBy: Array.from(new Set(r.touchedBy)) }));
+
+  const trialRows = ledgerRows
+    .map((r) => {
+      const net = r.debit - r.credit;
+      return { account: r.account, debit: net > 0 ? net : 0, credit: net < 0 ? -net : 0 };
+    })
+    .filter((r) => r.debit !== 0 || r.credit !== 0);
+
+  const neracaKiri = [], neracaKanan = [], labaKiri = [], labaKanan = [];
+  trialRows.forEach((r) => {
+    const m = ACCOUNTS_META[r.account];
+    if (!m || m.statement === 'none') return;
+    const amount = r.debit || r.credit;
+    const bucket = m.statement === 'neraca'
+      ? (m.side === 'kiri' ? neracaKiri : neracaKanan)
+      : (m.side === 'kiri' ? labaKiri : labaKanan);
+    bucket.push({ account: r.account, amount, sign: m.sign });
+  });
+
+  return {
+    n, txs, journalGroups, journalFlat, ledgerRows, trialRows,
+    neraca: { kiri: neracaKiri, kanan: neracaKanan },
+    labarugi: { kiri: labaKiri, kanan: labaKanan },
+    hasNeraca: neracaKiri.length > 0 || neracaKanan.length > 0,
+    hasLabarugi: labaKiri.length > 0 || labaKanan.length > 0,
+  };
+}
+
+const heartsForLevel = (n) => Math.min(8, 4 + Math.floor((n - 1) / 2));
+const EXAM_HEARTS = 5;
+const EXAM_COOLDOWN_MS = 3 * 60 * 1000;
+
+/* ============================================================================================
+   SMALL SHARED HOOKS
+   ============================================================================================ */
+
+function useShake() {
+  const [shake, setShake] = useState(false);
+  useEffect(() => {
+    if (!shake) return;
+    const t = setTimeout(() => setShake(false), 500);
+    return () => clearTimeout(t);
+  }, [shake]);
+  return [shake, () => setShake(true)];
+}
+
+function useRowInputs(expectedRows, keys) {
+  const [inputs, setInputs] = useState(() => expectedRows.map(() => keys.reduce((o, k) => ({ ...o, [k]: '' }), {})));
+  const setCell = (i, key, value) => setInputs((prev) => {
+    const next = prev.slice();
+    next[i] = { ...next[i], [key]: value };
+    return next;
+  });
+  return [inputs, setCell];
+}
+
+function gradeRows(expectedRows, fields, inputs) {
+  let ok = true;
+  const errors = expectedRows.map((row, i) => {
+    const rowErr = {};
+    fields.forEach((f) => {
+      const expected = row[f.key];
+      let same;
+      if (f.type === 'number') {
+        const norm = (v) => (v === '' || v === null || v === undefined ? 0 : Number(v));
+        same = norm(inputs[i][f.key]) === norm(expected);
+      } else {
+        same = String(inputs[i][f.key] || '') === String(expected || '');
+      }
+      rowErr[f.key] = !same;
+      if (!same) ok = false;
+    });
+    return rowErr;
+  });
+  return { ok, errors };
+}
+
+/* ============================================================================================
+   SHARED UI ATOMS
+   ============================================================================================ */
+
+const Button = ({ onClick, children, variant = 'primary', className = '', disabled = false }) => {
+  const baseStyle = "font-extrabold rounded-2xl py-3 px-6 transition-all active:scale-95 flex items-center justify-center gap-2 w-full sm:w-auto uppercase tracking-wide text-sm sm:text-base border-b-4 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100";
+  const variants = {
+    primary: "bg-green-500 text-white border-green-700 hover:bg-green-400 hover:border-green-600",
+    secondary: "bg-blue-500 text-white border-blue-700 hover:bg-blue-400 hover:border-blue-600",
+    danger: "bg-red-500 text-white border-red-700 hover:bg-red-400 hover:border-red-600",
+    outline: "bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400",
+    ghost: "bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200 hover:border-gray-300",
+  };
+  return (
+    <button onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${className}`}>
+      {children}
+    </button>
+  );
+};
+
+const CustomSelect = ({ value, onChange, options, error, theme = 'blue' }) => {
+  const themeClasses = {
+    blue: error ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 focus:border-blue-400 bg-gray-50',
+    purple: error ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 focus:border-purple-400 bg-gray-50',
+    orange: error ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 focus:border-orange-400 bg-gray-50',
+    pink: error ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 focus:border-pink-400 bg-gray-50',
+  };
+  return (
+    <div className="relative w-full">
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={`w-full p-2 sm:p-3 appearance-none border-2 rounded-xl font-bold text-xs sm:text-base focus:outline-none transition-colors ${themeClasses[theme]}`}>
+        {options.map((opt, i) => (
+          <option key={i} value={opt === "Pilih Akun..." ? "" : opt} disabled={opt === "Pilih Akun..."}>{opt}</option>
+        ))}
+      </select>
+      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+        <ChevronDown size={16} />
+      </div>
+    </div>
+  );
+};
+
+const HintBox = ({ tier, hints, onMore }) => {
+  if (tier < 0) return null;
+  return (
+    <div className="mt-6 bg-yellow-50 border-2 border-yellow-300 rounded-2xl p-4 flex gap-4 items-start animate-in slide-in-from-bottom-2">
+      <Lightbulb className="text-yellow-600 shrink-0 mt-1" />
+      <div>
+        <h4 className="font-extrabold text-yellow-800 mb-1 text-sm sm:text-base">Petunjuk Acco:</h4>
+        <p className="text-yellow-900 font-medium text-sm sm:text-base">{hints[tier]}</p>
+        {tier < hints.length - 1 && (
+          <button onClick={onMore} className="mt-3 bg-yellow-200 text-yellow-800 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold hover:bg-yellow-300 transition-colors">
+            Minta petunjuk lanjutan
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const GameFooter = ({ feedback, onCheck, onNext, hearts, onFail }) => (
+  <div className="bg-white border-t-2 border-gray-200 p-4 sm:p-6 shrink-0 z-20 sticky bottom-0">
+    <div className="max-w-4xl mx-auto flex flex-col sm:flex-row gap-4 items-center">
+      {feedback === 'success' && (
+        <div className="flex-1 text-green-600 font-extrabold flex items-center gap-2 w-full">
+          <CheckCircle2 size={28} /><span className="text-lg">Tepat Sekali!</span>
+        </div>
+      )}
+      {feedback === 'error' && (
+        <div className="flex-1 text-red-500 font-extrabold flex items-center gap-2 w-full">
+          <ShieldAlert size={28} /><span className="text-lg">Kurang tepat, coba lagi!</span>
+        </div>
+      )}
+      {!feedback && (
+        <div className="flex-1 text-gray-400 font-bold w-full text-center sm:text-left text-sm">
+          {hearts === 0 ? "Kamu kehabisan nyawa!" : "Periksa semua baris sebelum mengecek jawaban."}
+        </div>
+      )}
+      <div className="w-full sm:w-auto min-w-[200px]">
+        {hearts === 0 ? (
+          <Button onClick={onFail} variant="danger">TERIMA KEKALAHAN</Button>
+        ) : feedback === 'success' ? (
+          <Button onClick={onNext} variant="primary">LANJUT <ArrowRight size={20} /></Button>
+        ) : (
+          <Button onClick={onCheck} variant="secondary">CEK JAWABAN</Button>
+        )}
+      </div>
+    </div>
+  </div>
+);
+
+const StageHeader = ({ badgeClass, badgeText, title, right }) => (
+  <div className="flex items-center gap-3 mb-4 mt-2 flex-wrap">
+    <div className={`${badgeClass} p-2 rounded-lg font-extrabold text-sm`}>{badgeText}</div>
+    <h2 className="text-xl sm:text-2xl font-extrabold text-gray-800 flex-1">{title}</h2>
+    {right}
+  </div>
+);
+
+/* ============================================================================================
+   RECAP PANEL — lets a student flip back through everything they've already locked in
+   (Transaksi -> Jurnal -> Buku Besar -> Neraca Saldo) while working the next stage.
+   ============================================================================================ */
+
+const PHASE_ORDER = ['journal', 'ledger', 'trialBalance', 'finStat'];
+
+function RecapPanel({ open, onClose, builtLevel, phase }) {
+  const phaseIdx = PHASE_ORDER.indexOf(phase);
+  const tabs = [
+    { key: 'transaksi', label: 'Transaksi', always: true },
+    { key: 'jurnal', label: 'Jurnal Umum', minPhase: 1 },
+    { key: 'ledger', label: 'Buku Besar', minPhase: 2 },
+    { key: 'trial', label: 'Neraca Saldo', minPhase: 3 },
+  ].filter((t) => t.always || phaseIdx >= t.minPhase);
+
+  const [tab, setTab] = useState(tabs[tabs.length - 1].key);
+  useEffect(() => { setTab(tabs[tabs.length - 1].key); }, [phase]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <div className="absolute inset-0 bg-black/40 animate-in fade-in duration-200" onClick={onClose} />
+      <div className="relative w-full sm:w-[440px] h-full bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+        <div className="p-4 sm:p-5 border-b-2 border-gray-100 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2 font-extrabold text-gray-800 text-lg">
+            <Eye size={20} className="text-blue-500" /> Rekap Siklus
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 p-1"><X size={22} /></button>
+        </div>
+        <div className="flex gap-1 px-3 pt-3 shrink-0 flex-wrap">
+          {tabs.map((t) => (
+            <button key={t.key} onClick={() => setTab(t.key)}
+              className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition-colors ${tab === t.key ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5">
+          {tab === 'transaksi' && (
+            <div className="space-y-3">
+              {builtLevel.txs.map((tx, i) => (
+                <div key={i} className="bg-gray-50 border-2 border-gray-100 rounded-xl p-3">
+                  <div className="text-xs font-extrabold text-gray-400 mb-1">TRANSAKSI {i + 1}</div>
+                  <div className="text-sm text-gray-700 font-medium">{tx.text}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          {tab === 'jurnal' && (
+            <div className="space-y-4">
+              {builtLevel.journalGroups.map((g) => (
+                <div key={g.txIdx} className="border-2 border-gray-100 rounded-xl overflow-hidden">
+                  <div className="bg-gray-50 px-3 py-2 text-xs font-extrabold text-gray-500">TRANSAKSI {g.txIdx + 1} — {g.title}</div>
+                  <div className="p-3 space-y-1">
+                    {g.rows.map((r, i) => (
+                      <div key={i} className="flex justify-between text-sm">
+                        <span className={`font-semibold text-gray-700 ${r.type === 'credit' ? 'pl-6' : ''}`}>
+                          {r.type === 'debit' ? '' : '— '}{r.account}
+                        </span>
+                        <span className="font-mono text-gray-500">{fmtRp(r.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {tab === 'ledger' && (
+            <div className="space-y-3">
+              {builtLevel.ledgerRows.map((r, i) => (
+                <div key={i} className="border-2 border-gray-100 rounded-xl overflow-hidden">
+                  <div className="bg-purple-50 px-3 py-2 text-xs font-extrabold text-purple-800">{r.account.toUpperCase()}</div>
+                  <div className="flex text-sm">
+                    <div className="w-1/2 p-3 border-r-2 border-gray-100">
+                      <div className="text-[10px] text-gray-400 font-bold mb-1">DEBIT</div>
+                      <div className="font-mono text-gray-700">{fmtRp(r.debit)}</div>
+                    </div>
+                    <div className="w-1/2 p-3">
+                      <div className="text-[10px] text-gray-400 font-bold mb-1">KREDIT</div>
+                      <div className="font-mono text-gray-700">{fmtRp(r.credit)}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {tab === 'trial' && (
+            <div className="border-2 border-gray-100 rounded-xl overflow-hidden">
+              <div className="grid grid-cols-3 gap-2 bg-gray-50 px-3 py-2 text-xs font-extrabold text-gray-500">
+                <div>AKUN</div><div className="text-right">DEBIT</div><div className="text-right">KREDIT</div>
+              </div>
+              {builtLevel.trialRows.map((r, i) => (
+                <div key={i} className="grid grid-cols-3 gap-2 px-3 py-2 text-sm border-t border-gray-100">
+                  <div className="font-semibold text-gray-700">{r.account}</div>
+                  <div className="text-right font-mono text-gray-600">{r.debit ? fmtRp(r.debit) : '-'}</div>
+                  <div className="text-right font-mono text-gray-600">{r.credit ? fmtRp(r.credit) : '-'}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================================
+   PHASE 1 — JURNAL UMUM
+   ============================================================================================ */
+
+function PhaseJournal({ builtLevel, hearts, setHearts, onFail, onNext, onOpenRecap }) {
+  const fields = [{ key: 'account', type: 'text' }, { key: 'amount', type: 'number' }];
+  const [inputs, setCell] = useRowInputs(builtLevel.journalFlat, ['account', 'amount']);
+  const [errors, setErrors] = useState(() => builtLevel.journalFlat.map(() => ({ account: false, amount: false })));
+  const [feedback, setFeedback] = useState(null);
+  const [shake, triggerShake] = useShake();
+  const [hintTier, setHintTier] = useState(-1);
+  const [hintGroupIdx, setHintGroupIdx] = useState(0);
+
+  const handleCheck = () => {
+    const { ok, errors: newErrors } = gradeRows(builtLevel.journalFlat, fields, inputs);
+    setErrors(newErrors);
+    if (ok) {
+      setFeedback('success');
+    } else {
+      setFeedback('error'); triggerShake();
+      setHearts((h) => Math.max(0, h - 1));
+      const firstBadFlatIdx = newErrors.findIndex((e) => e.account || e.amount);
+      const badGroupIdx = builtLevel.journalFlat[firstBadFlatIdx]?.txIdx ?? 0;
+      setHintGroupIdx(badGroupIdx);
+      setHintTier((t) => Math.min(t + 1, 1));
+    }
+  };
+
+  const activeGroup = builtLevel.journalGroups[hintGroupIdx];
+  const hints = activeGroup ? [activeGroup.hint, activeGroup.hint2] : [];
+
+  return (
+    <div className="flex-1 overflow-y-auto flex flex-col bg-white rounded-t-3xl border-t-2 border-gray-200 shadow-inner">
+      <div className="p-4 sm:p-6 max-w-4xl mx-auto w-full flex-1">
+        <StageHeader
+          badgeClass="bg-blue-100 text-blue-600" badgeText="TAHAP 1" title="Jurnal Umum"
+          right={<button onClick={onOpenRecap} className="text-xs font-bold text-blue-500 hover:text-blue-700 flex items-center gap-1"><Eye size={14} /> Lihat semua transaksi</button>}
+        />
+        <p className="text-gray-600 mb-6 font-medium text-sm sm:text-base">
+          Catat {builtLevel.n} transaksi di bawah ke dalam Jurnal. Tentukan akun serta sisi Debit/Kreditnya satu per satu.
+        </p>
+
+        <div className="space-y-5">
+          {builtLevel.journalGroups.map((group) => {
+            const groupHasError = group.rows.some((r) => errors[r.flatIdx]?.account || errors[r.flatIdx]?.amount);
+            return (
+              <div key={group.txIdx} className={`bg-white border-2 rounded-2xl p-3 sm:p-5 shadow-sm transition-colors ${groupHasError ? 'border-red-300' : 'border-gray-200'} ${shake && groupHasError ? 'animate-shake' : ''}`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="bg-gray-800 text-white text-xs font-extrabold w-6 h-6 rounded-full flex items-center justify-center shrink-0">{group.txIdx + 1}</div>
+                  <p className="text-gray-700 font-semibold text-sm sm:text-base leading-snug">{group.text}</p>
+                </div>
+                <div className="grid grid-cols-12 gap-2 sm:gap-4 mb-2 text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider border-b-2 border-gray-100 pb-2">
+                  <div className="col-span-6 sm:col-span-5">Nama Akun</div>
+                  <div className="col-span-3 sm:col-span-3 text-right">Debit (Rp)</div>
+                  <div className="col-span-3 sm:col-span-4 text-right">Kredit (Rp)</div>
+                </div>
+                {group.rows.map((row) => (
+                  <div key={row.flatIdx} className="grid grid-cols-12 gap-2 sm:gap-4 items-center mb-2">
+                    <div className={`col-span-6 sm:col-span-5 ${row.type === 'credit' ? 'pl-4 sm:pl-8' : ''}`}>
+                      <CustomSelect
+                        value={inputs[row.flatIdx].account}
+                        onChange={(val) => setCell(row.flatIdx, 'account', val)}
+                        options={ACCOUNT_OPTIONS}
+                        error={errors[row.flatIdx]?.account}
+                        theme="blue"
+                      />
+                    </div>
+                    <div className="col-span-3 sm:col-span-3">
+                      {row.type === 'debit' ? (
+                        <input type="number" placeholder="0" value={inputs[row.flatIdx].amount} onChange={(e) => setCell(row.flatIdx, 'amount', e.target.value)}
+                          className={`w-full p-2 sm:p-3 bg-gray-50 border-2 rounded-xl text-right font-mono text-xs sm:text-base focus:outline-none transition-colors ${errors[row.flatIdx]?.amount ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 focus:border-blue-400'}`} />
+                      ) : <div className="w-full p-2 sm:p-3 bg-gray-100 border-2 border-transparent rounded-xl text-center text-gray-400 font-mono">-</div>}
+                    </div>
+                    <div className="col-span-3 sm:col-span-4">
+                      {row.type === 'credit' ? (
+                        <input type="number" placeholder="0" value={inputs[row.flatIdx].amount} onChange={(e) => setCell(row.flatIdx, 'amount', e.target.value)}
+                          className={`w-full p-2 sm:p-3 bg-gray-50 border-2 rounded-xl text-right font-mono text-xs sm:text-base focus:outline-none transition-colors ${errors[row.flatIdx]?.amount ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 focus:border-blue-400'}`} />
+                      ) : <div className="w-full p-2 sm:p-3 bg-gray-100 border-2 border-transparent rounded-xl text-center text-gray-400 font-mono">-</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+
+        <HintBox tier={feedback === 'success' ? -1 : hintTier} hints={hints} onMore={() => setHintTier(1)} />
+      </div>
+      <GameFooter feedback={feedback} onCheck={handleCheck} onNext={onNext} hearts={hearts} onFail={onFail} />
+    </div>
+  );
+}
+
+/* ============================================================================================
+   SHARED T-ACCOUNT TABLE — used by both Buku Besar and Neraca Saldo (same shape: account label
+   + a Debit input + a Kredit input).
+   ============================================================================================ */
+
+const T_ACCOUNT_THEMES = {
+  purple: { header: 'bg-purple-50 text-purple-900', focus: 'border-gray-200 focus:border-purple-400' },
+  orange: { header: 'bg-orange-50 text-orange-900', focus: 'border-gray-200 focus:border-orange-400' },
+};
+
+function TAccountGrid({ rows, inputs, setCell, errors, theme, layout }) {
+  if (layout === 'grid2') {
+    const t = T_ACCOUNT_THEMES[theme] || T_ACCOUNT_THEMES.purple;
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+        {rows.map((acc, i) => (
+          <div key={i} className="bg-white border-2 border-gray-200 rounded-xl overflow-hidden shadow-sm">
+            <div className={`${t.header} py-3 px-4 text-center font-extrabold border-b-2 border-gray-200 text-sm sm:text-base`}>
+              T-Account: {acc.account.toUpperCase()}
+            </div>
+            <div className="flex">
+              <div className="w-1/2 p-3 sm:p-4 border-r-2 border-gray-200 bg-gray-50/50">
+                <div className="text-[10px] sm:text-xs font-bold text-gray-400 text-center mb-2">DEBIT (KIRI)</div>
+                <input type="number" placeholder="0" value={inputs[i].debit} onChange={(e) => setCell(i, 'debit', e.target.value)}
+                  className={`w-full p-2 bg-white border-2 rounded-lg text-right font-mono text-sm sm:text-base focus:outline-none transition-colors ${errors[i]?.debit ? 'border-red-500 bg-red-50 text-red-700' : t.focus}`} />
+              </div>
+              <div className="w-1/2 p-3 sm:p-4 bg-gray-50/50">
+                <div className="text-[10px] sm:text-xs font-bold text-gray-400 text-center mb-2">KREDIT (KANAN)</div>
+                <input type="number" placeholder="0" value={inputs[i].credit} onChange={(e) => setCell(i, 'credit', e.target.value)}
+                  className={`w-full p-2 bg-white border-2 rounded-lg text-right font-mono text-sm sm:text-base focus:outline-none transition-colors ${errors[i]?.credit ? 'border-red-500 bg-red-50 text-red-700' : t.focus}`} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  // layout === 'table'
+  const totalDebit = rows.reduce((s, _, i) => s + (Number(inputs[i].debit) || 0), 0);
+  const totalCredit = rows.reduce((s, _, i) => s + (Number(inputs[i].credit) || 0), 0);
+  const expectedTotalDebit = rows.reduce((s, r) => s + (Number(r.debit) || 0), 0);
+  const expectedTotalCredit = rows.reduce((s, r) => s + (Number(r.credit) || 0), 0);
+  return (
+    <div className="bg-white border-2 border-gray-200 rounded-2xl p-3 sm:p-5 shadow-sm">
+      <div className="grid grid-cols-12 gap-2 sm:gap-4 mb-3 text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider border-b-2 border-gray-100 pb-2">
+        <div className="col-span-6 sm:col-span-5">Nama Akun</div>
+        <div className="col-span-3 sm:col-span-3 text-right">Debit (Rp)</div>
+        <div className="col-span-3 sm:col-span-4 text-right">Kredit (Rp)</div>
+      </div>
+      {rows.map((r, i) => (
+        <div key={i} className="grid grid-cols-12 gap-2 sm:gap-4 items-center mb-3">
+          <div className="col-span-6 sm:col-span-5 font-bold text-gray-700 pl-2 sm:pl-4 text-sm sm:text-base">{r.account}</div>
+          <div className="col-span-3 sm:col-span-3">
+            <input type="number" placeholder="0" value={inputs[i].debit} onChange={(e) => setCell(i, 'debit', e.target.value)}
+              className={`w-full p-2 sm:p-3 bg-gray-50 border-2 rounded-xl text-right font-mono text-sm sm:text-base focus:outline-none transition-colors ${errors[i]?.debit ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 focus:border-orange-400'}`} />
+          </div>
+          <div className="col-span-3 sm:col-span-4">
+            <input type="number" placeholder="0" value={inputs[i].credit} onChange={(e) => setCell(i, 'credit', e.target.value)}
+              className={`w-full p-2 sm:p-3 bg-gray-50 border-2 rounded-xl text-right font-mono text-sm sm:text-base focus:outline-none transition-colors ${errors[i]?.credit ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 focus:border-orange-400'}`} />
+          </div>
+        </div>
+      ))}
+      <div className="grid grid-cols-12 gap-2 sm:gap-4 items-center border-t-2 border-gray-200 pt-4 mt-2 bg-gray-50/50 rounded-b-xl -mx-3 sm:-mx-5 -mb-3 sm:-mb-5 p-3 sm:p-5">
+        <div className="col-span-6 sm:col-span-5 font-extrabold text-gray-800 text-right pr-2 sm:pr-4 text-sm sm:text-base">TOTAL :</div>
+        <div className={`col-span-3 sm:col-span-3 text-right font-mono text-sm sm:text-base font-bold p-2 sm:p-3 rounded-lg ${totalDebit === expectedTotalDebit && totalDebit > 0 ? 'text-green-700 bg-green-100 border-green-300 border-2' : 'text-gray-700 bg-white border-2 border-gray-200'}`}>
+          {totalDebit.toLocaleString('id-ID')}
+        </div>
+        <div className={`col-span-3 sm:col-span-4 text-right font-mono text-sm sm:text-base font-bold p-2 sm:p-3 rounded-lg ${totalCredit === expectedTotalCredit && totalCredit > 0 ? 'text-green-700 bg-green-100 border-green-300 border-2' : 'text-gray-700 bg-white border-2 border-gray-200'}`}>
+          {totalCredit.toLocaleString('id-ID')}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================================
+   PHASE 2 — BUKU BESAR (POSTING)
+   ============================================================================================ */
+
+function PhaseLedger({ builtLevel, hearts, setHearts, onNext, onFail, onOpenRecap }) {
+  const fields = [{ key: 'debit', type: 'number' }, { key: 'credit', type: 'number' }];
+  const rows = builtLevel.ledgerRows;
+  const [inputs, setCell] = useRowInputs(rows, ['debit', 'credit']);
+  const [errors, setErrors] = useState(() => rows.map(() => ({ debit: false, credit: false })));
+  const [feedback, setFeedback] = useState(null);
+  const [shake, triggerShake] = useShake();
+  const [hintTier, setHintTier] = useState(-1);
+  const [hintRowIdx, setHintRowIdx] = useState(0);
+
+  const handleCheck = () => {
+    const { ok, errors: newErrors } = gradeRows(rows, fields, inputs);
+    setErrors(newErrors);
+    if (ok) setFeedback('success');
+    else {
+      setFeedback('error'); triggerShake();
+      setHearts((h) => Math.max(0, h - 1));
+      const bad = newErrors.findIndex((e) => e.debit || e.credit);
+      setHintRowIdx(bad >= 0 ? bad : 0);
+      setHintTier((t) => Math.min(t + 1, 1));
+    }
+  };
+
+  const badRow = rows[hintRowIdx];
+  const hints = badRow ? [
+    `Akun "${badRow.account}" muncul di Transaksi ${badRow.touchedBy.join(', ')}. Jumlahkan seluruh nilai Debit dari transaksi itu untuk kolom Debit, lalu jumlahkan seluruh nilai Kreditnya untuk kolom Kredit.`,
+    `Jawaban akun ini: Debit = ${fmtRp(badRow.debit)}, Kredit = ${fmtRp(badRow.credit)}.`,
+  ] : [];
+
+  return (
+    <div className="flex-1 overflow-y-auto flex flex-col bg-white rounded-t-3xl border-t-2 border-gray-200 shadow-inner">
+      <div className="p-4 sm:p-6 max-w-4xl mx-auto w-full flex-1">
+        <StageHeader
+          badgeClass="bg-purple-100 text-purple-700" badgeText="TAHAP 2" title="Posting ke Buku Besar"
+          right={<button onClick={onOpenRecap} className="text-xs font-bold text-purple-600 hover:text-purple-800 flex items-center gap-1"><Eye size={14} /> Lihat Jurnal</button>}
+        />
+        <p className="text-gray-600 mb-6 font-medium text-sm sm:text-base">
+          Jumlahkan semua Debit dan Kredit yang menyentuh setiap akun dari {builtLevel.n} transaksi di atas, lalu posting totalnya ke T-Account masing-masing.
+        </p>
+        <div className={shake ? 'animate-shake' : ''}>
+          <TAccountGrid rows={rows} inputs={inputs} setCell={setCell} errors={errors} theme="purple" layout="grid2" />
+        </div>
+        <HintBox tier={feedback === 'success' ? -1 : hintTier} hints={hints} onMore={() => setHintTier(1)} />
+      </div>
+      <GameFooter feedback={feedback} onCheck={handleCheck} onNext={onNext} hearts={hearts} onFail={onFail} />
+    </div>
+  );
+}
+
+/* ============================================================================================
+   PHASE 3 — NERACA SALDO (TRIAL BALANCE)
+   ============================================================================================ */
+
+function PhaseTrialBalance({ builtLevel, hearts, setHearts, onNext, onFail, onOpenRecap }) {
+  const fields = [{ key: 'debit', type: 'number' }, { key: 'credit', type: 'number' }];
+  const rows = builtLevel.trialRows;
+  const [inputs, setCell] = useRowInputs(rows, ['debit', 'credit']);
+  const [errors, setErrors] = useState(() => rows.map(() => ({ debit: false, credit: false })));
+  const [feedback, setFeedback] = useState(null);
+  const [shake, triggerShake] = useShake();
+  const [hintTier, setHintTier] = useState(-1);
+  const [hintRowIdx, setHintRowIdx] = useState(0);
+
+  const handleCheck = () => {
+    const { ok, errors: newErrors } = gradeRows(rows, fields, inputs);
+    setErrors(newErrors);
+    if (ok) setFeedback('success');
+    else {
+      setFeedback('error'); triggerShake();
+      setHearts((h) => Math.max(0, h - 1));
+      const bad = newErrors.findIndex((e) => e.debit || e.credit);
+      setHintRowIdx(bad >= 0 ? bad : 0);
+      setHintTier((t) => Math.min(t + 1, 1));
+    }
+  };
+
+  const badRow = rows[hintRowIdx];
+  const hints = badRow ? [
+    `Bandingkan lagi total Debit dan Kredit akun "${badRow.account}" di Buku Besar. Selisihnya (yang lebih besar dikurangi yang lebih kecil) ditulis di sisi yang lebih besar.`,
+    `Saldo akhir "${badRow.account}" ada di sisi ${badRow.debit > 0 ? 'DEBIT sebesar ' + fmtRp(badRow.debit) : 'KREDIT sebesar ' + fmtRp(badRow.credit)}.`,
+  ] : [];
+
+  return (
+    <div className="flex-1 overflow-y-auto flex flex-col bg-white rounded-t-3xl border-t-2 border-gray-200 shadow-inner">
+      <div className="p-4 sm:p-6 max-w-4xl mx-auto w-full flex-1">
+        <StageHeader
+          badgeClass="bg-orange-100 text-orange-600" badgeText="TAHAP 3" title="Neraca Saldo"
+          right={<button onClick={onOpenRecap} className="text-xs font-bold text-orange-600 hover:text-orange-800 flex items-center gap-1"><Eye size={14} /> Lihat Buku Besar</button>}
+        />
+        <p className="text-gray-600 mb-6 font-medium text-sm sm:text-base">
+          Hitung SALDO AKHIR dari Buku Besar, letakkan di sisi yang lebih besar. Akun bersaldo nol tidak perlu dicantumkan lagi.
+        </p>
+        <div className={shake ? 'animate-shake' : ''}>
+          <TAccountGrid rows={rows} inputs={inputs} setCell={setCell} errors={errors} theme="orange" layout="table" />
+        </div>
+        <HintBox tier={feedback === 'success' ? -1 : hintTier} hints={hints} onMore={() => setHintTier(1)} />
+      </div>
+      <GameFooter feedback={feedback} onCheck={handleCheck} onNext={onNext} hearts={hearts} onFail={onFail} />
+    </div>
+  );
+}
+
+/* ============================================================================================
+   PHASE 4 — LAPORAN KEUANGAN (may render Neraca and/or Laba Rugi depending on what the
+   cumulative transactions actually touched)
+   ============================================================================================ */
+
+function StatementBlock({ title, badge, leftTitle, rightTitle, leftRows, rightRows, leftInputs, setLeftCell, rightInputs, setRightCell, leftErrors, rightErrors, showNetRow }) {
+  // Totals are SIGNED: contra accounts (Prive, Akumulasi Penyusutan, Retur/Potongan ...) carry
+  // sign -1 on their own row and must subtract from the column total, not add to it.
+  const totalLeft = leftRows.reduce((s, r, i) => s + (Number(leftInputs[i].amount) || 0) * r.sign, 0);
+  const totalRight = rightRows.reduce((s, r, i) => s + (Number(rightInputs[i].amount) || 0) * r.sign, 0);
+  const expectedLeft = leftRows.reduce((s, r) => s + (Number(r.amount) || 0) * r.sign, 0);
+  const expectedRight = rightRows.reduce((s, r) => s + (Number(r.amount) || 0) * r.sign, 0);
+  const leftFilled = leftInputs.some((c) => c.amount !== '');
+  const rightFilled = rightInputs.some((c) => c.amount !== '');
+  const leftMatched = leftFilled && totalLeft === expectedLeft;
+  const rightMatched = rightFilled && totalRight === expectedRight;
+  return (
+    <div className="mb-8">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-xs font-extrabold text-pink-600 bg-pink-100 px-2 py-1 rounded">{badge}</span>
+        <h3 className="font-extrabold text-gray-800 text-lg">{title}</h3>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white border-2 border-gray-200 rounded-2xl p-4 sm:p-5 shadow-sm">
+          <h4 className="text-sm sm:text-base font-extrabold text-gray-800 border-b-2 border-gray-100 pb-3 mb-4">{leftTitle}</h4>
+          <div className="space-y-4">
+            {leftRows.map((row, i) => (
+              <div key={i} className="flex flex-col gap-2">
+                <CustomSelect value={leftInputs[i].account} onChange={(v) => setLeftCell(i, 'account', v)} options={ACCOUNT_OPTIONS} error={leftErrors[i]?.account} theme="blue" />
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 sm:top-3 text-gray-400 font-bold text-sm sm:text-base">Rp</span>
+                  <input type="number" placeholder="0" value={leftInputs[i].amount} onChange={(e) => setLeftCell(i, 'amount', e.target.value)}
+                    className={`w-full p-2 sm:p-3 pl-10 sm:pl-12 bg-gray-50 border-2 rounded-xl text-right font-mono text-sm sm:text-base focus:outline-none transition-colors ${leftErrors[i]?.amount ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 focus:border-blue-400'}`} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className={`mt-6 pt-4 border-t-2 border-gray-200 flex justify-between font-extrabold text-sm sm:text-base rounded-b-lg ${leftMatched ? 'text-green-700' : 'text-gray-800'}`}>
+            <span>Total:</span><span className="font-mono">{fmtRp(totalLeft)}</span>
+          </div>
+        </div>
+        <div className="bg-white border-2 border-gray-200 rounded-2xl p-4 sm:p-5 shadow-sm">
+          <h4 className="text-sm sm:text-base font-extrabold text-gray-800 border-b-2 border-gray-100 pb-3 mb-4">{rightTitle}</h4>
+          <div className="space-y-4">
+            {rightRows.map((row, i) => (
+              <div key={i} className="flex flex-col gap-2">
+                <CustomSelect value={rightInputs[i].account} onChange={(v) => setRightCell(i, 'account', v)} options={ACCOUNT_OPTIONS} error={rightErrors[i]?.account} theme="pink" />
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 sm:top-3 text-gray-400 font-bold text-sm sm:text-base">Rp</span>
+                  <input type="number" placeholder="0" value={rightInputs[i].amount} onChange={(e) => setRightCell(i, 'amount', e.target.value)}
+                    className={`w-full p-2 sm:p-3 pl-10 sm:pl-12 bg-gray-50 border-2 rounded-xl text-right font-mono text-sm sm:text-base focus:outline-none transition-colors ${rightErrors[i]?.amount ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 focus:border-pink-400'}`} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className={`mt-6 pt-4 border-t-2 border-gray-200 flex justify-between font-extrabold text-sm sm:text-base ${rightMatched ? 'text-green-700' : 'text-gray-800'}`}>
+            <span>Total:</span><span className="font-mono">{fmtRp(totalRight)}</span>
+          </div>
+        </div>
+      </div>
+      {showNetRow && (
+        <div className="mt-6 p-4 sm:p-5 rounded-xl bg-green-50 border-2 border-green-300 flex flex-col sm:flex-row justify-between items-center text-green-900 font-extrabold text-base sm:text-lg gap-2 shadow-sm">
+          <span>LABA / RUGI BERSIH (Pendapatan − Beban):</span>
+          <span className="font-mono bg-white px-4 py-1 rounded-lg border-2 border-green-200">{fmtRp(totalLeft - totalRight)}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PhaseFinancialStatement({ builtLevel, hearts, setHearts, onNext, onFail, onOpenRecap }) {
+  const fields = [{ key: 'account', type: 'text' }, { key: 'amount', type: 'number' }];
+  const { neraca, labarugi, hasNeraca, hasLabarugi } = builtLevel;
+
+  const [nKiriIn, setNKiriCell] = useRowInputs(neraca.kiri, ['account', 'amount']);
+  const [nKananIn, setNKananCell] = useRowInputs(neraca.kanan, ['account', 'amount']);
+  const [lKiriIn, setLKiriCell] = useRowInputs(labarugi.kiri, ['account', 'amount']);
+  const [lKananIn, setLKananCell] = useRowInputs(labarugi.kanan, ['account', 'amount']);
+
+  const [nKiriErr, setNKiriErr] = useState(() => neraca.kiri.map(() => ({})));
+  const [nKananErr, setNKananErr] = useState(() => neraca.kanan.map(() => ({})));
+  const [lKiriErr, setLKiriErr] = useState(() => labarugi.kiri.map(() => ({})));
+  const [lKananErr, setLKananErr] = useState(() => labarugi.kanan.map(() => ({})));
+
+  const [feedback, setFeedback] = useState(null);
+  const [shake, triggerShake] = useShake();
+  const [hintTier, setHintTier] = useState(-1);
+  const [hintAccount, setHintAccount] = useState(null);
+
+  const handleCheck = () => {
+    const rN1 = gradeRows(neraca.kiri, fields, nKiriIn);
+    const rN2 = gradeRows(neraca.kanan, fields, nKananIn);
+    const rL1 = gradeRows(labarugi.kiri, fields, lKiriIn);
+    const rL2 = gradeRows(labarugi.kanan, fields, lKananIn);
+    setNKiriErr(rN1.errors); setNKananErr(rN2.errors); setLKiriErr(rL1.errors); setLKananErr(rL2.errors);
+    const ok = rN1.ok && rN2.ok && rL1.ok && rL2.ok;
+    if (ok) {
+      setFeedback('success');
+    } else {
+      setFeedback('error'); triggerShake();
+      setHearts((h) => Math.max(0, h - 1));
+      const sections = [
+        { rows: neraca.kiri, errs: rN1.errors }, { rows: neraca.kanan, errs: rN2.errors },
+        { rows: labarugi.kiri, errs: rL1.errors }, { rows: labarugi.kanan, errs: rL2.errors },
+      ];
+      let picked = null;
+      for (const sec of sections) {
+        const badIdx = sec.errs.findIndex((e) => e.account || e.amount);
+        if (badIdx >= 0) { picked = sec.rows[badIdx].account; break; }
+      }
+      setHintAccount(picked);
+      setHintTier((t) => Math.min(t + 1, 1));
+    }
+  };
+
+  const explain = hintAccount ? explainAccount(hintAccount) : null;
+  const hints = explain ? [explain.soft, explain.explicit] : [];
+
+  return (
+    <div className="flex-1 overflow-y-auto flex flex-col bg-white rounded-t-3xl border-t-2 border-gray-200 shadow-inner">
+      <div className="p-4 sm:p-6 max-w-4xl mx-auto w-full flex-1">
+        <StageHeader
+          badgeClass="bg-pink-100 text-pink-700" badgeText="TAHAP 4" title="Laporan Keuangan"
+          right={<button onClick={onOpenRecap} className="text-xs font-bold text-pink-600 hover:text-pink-800 flex items-center gap-1"><Eye size={14} /> Lihat Neraca Saldo</button>}
+        />
+        <p className="text-gray-600 mb-6 font-medium text-sm sm:text-base">
+          Susun hasil akhir dari {builtLevel.n} transaksi ini menjadi laporan keuangan. Ambil setiap angka dari Neraca Saldo.
+        </p>
+        <div className={shake ? 'animate-shake' : ''}>
+          {hasNeraca && (
+            <StatementBlock
+              title="Neraca" badge="POSISI KEUANGAN"
+              leftTitle="ASET" rightTitle="LIABILITAS & EKUITAS"
+              leftRows={neraca.kiri} rightRows={neraca.kanan}
+              leftInputs={nKiriIn} setLeftCell={setNKiriCell} rightInputs={nKananIn} setRightCell={setNKananCell}
+              leftErrors={nKiriErr} rightErrors={nKananErr}
+              showNetRow={false}
+            />
+          )}
+          {hasLabarugi && (
+            <StatementBlock
+              title="Laba Rugi" badge="HASIL USAHA"
+              leftTitle="PENDAPATAN" rightTitle="BEBAN & HARGA POKOK"
+              leftRows={labarugi.kiri} rightRows={labarugi.kanan}
+              leftInputs={lKiriIn} setLeftCell={setLKiriCell} rightInputs={lKananIn} setRightCell={setLKananCell}
+              leftErrors={lKiriErr} rightErrors={lKananErr}
+              showNetRow={true}
+            />
+          )}
+        </div>
+        <HintBox tier={feedback === 'success' ? -1 : hintTier} hints={hints} onMore={() => setHintTier(1)} />
+      </div>
+      <GameFooter feedback={feedback} onCheck={handleCheck} onNext={onNext} hearts={hearts} onFail={onFail} />
+    </div>
+  );
+}
+
+/* ============================================================================================
+   SCREEN: ANIMATED INTRO
+   ============================================================================================ */
+
+const DEMO_TXS = [
+  { text: "Setor modal kas Rp 10.000.000", d: "Kas", c: "Modal", amt: "10.000.000" },
+  { text: "Beli peralatan tunai Rp 2.000.000", d: "Peralatan", c: "Kas", amt: "2.000.000" },
+  { text: "Terima pendapatan jasa Rp 5.000.000", d: "Kas", c: "Pendapatan Jasa", amt: "5.000.000" },
+];
+
+function IntroScreen({ onStart }) {
+  const [demoIdx, setDemoIdx] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setDemoIdx((i) => (i + 1) % DEMO_TXS.length), 3200);
+    return () => clearInterval(t);
+  }, []);
+  const demo = DEMO_TXS[demoIdx];
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-green-50 via-white to-blue-50 flex flex-col items-center justify-center p-6 relative overflow-hidden">
+      <div className="acco-blob acco-blob-1" />
+      <div className="acco-blob acco-blob-2" />
+      <div className="acco-blob acco-blob-3" />
+
+      <div className="acco-float absolute top-[12%] left-[8%] text-blue-300" style={{ animationDelay: '0s' }}><FileText size={40} /></div>
+      <div className="acco-float absolute top-[20%] right-[10%] text-orange-300" style={{ animationDelay: '0.8s' }}><Coins size={44} /></div>
+      <div className="acco-float absolute bottom-[24%] left-[12%] text-purple-300" style={{ animationDelay: '1.6s' }}><BarChart3 size={38} /></div>
+      <div className="acco-float absolute bottom-[16%] right-[14%] text-green-300" style={{ animationDelay: '0.4s' }}><TrendingUp size={42} /></div>
+
+      <div className="relative z-10 flex flex-col items-center max-w-lg w-full">
+        <div className="w-28 h-28 bg-green-500 rounded-3xl flex items-center justify-center mb-6 shadow-xl acco-bounce-in transform -rotate-3">
+          <BookOpen size={56} color="white" />
+        </div>
+
+        <h1 className="text-4xl sm:text-5xl font-extrabold text-gray-800 mb-3 text-center acco-fade-up" style={{ animationDelay: '0.1s' }}>
+          Halo! Saya <span className="text-green-500">Account</span><span className="text-yellow-500">In</span> Quest.
+        </h1>
+        <p className="text-gray-500 text-base sm:text-lg mb-8 text-center leading-relaxed acco-fade-up" style={{ animationDelay: '0.25s' }}>
+          Siap menaklukkan dunia Akuntansi? Yuk main sambil menyusun siklus akuntansi — dari Jurnal Umum sampai Laporan Keuangan — layaknya akuntan profesional.
+        </p>
+
+        <div className="w-full bg-white border-2 border-gray-100 rounded-2xl shadow-lg p-4 sm:p-5 mb-8 acco-fade-up" style={{ animationDelay: '0.4s' }}>
+          <div className="text-xs font-extrabold text-gray-400 mb-2 flex items-center gap-1"><Sparkles size={14} className="text-yellow-500" /> CONTOH TRANSAKSI</div>
+          <p className="text-gray-700 font-semibold text-sm mb-3 min-h-[40px] transition-all">{demo.text}</p>
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-2 text-center">
+              <div className="text-[10px] font-bold text-blue-400 mb-0.5">DEBIT</div>
+              <div className="font-extrabold text-blue-700 text-xs sm:text-sm">{demo.d}</div>
+            </div>
+            <div className="bg-pink-50 border-2 border-pink-200 rounded-xl p-2 text-center">
+              <div className="text-[10px] font-bold text-pink-400 mb-0.5">KREDIT</div>
+              <div className="font-extrabold text-pink-700 text-xs sm:text-sm">{demo.c}</div>
+            </div>
+          </div>
+          <div className="flex justify-center gap-1.5 mt-3">
+            {DEMO_TXS.map((_, i) => (
+              <div key={i} className={`h-1.5 rounded-full transition-all ${i === demoIdx ? 'w-5 bg-green-500' : 'w-1.5 bg-gray-200'}`} />
+            ))}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4 sm:gap-6 text-gray-400 text-xs font-bold mb-8 acco-fade-up" style={{ animationDelay: '0.5s' }}>
+          <span className="flex items-center gap-1"><Briefcase size={14} /> 3 Industri</span>
+          <span className="w-1 h-1 rounded-full bg-gray-300" />
+          <span className="flex items-center gap-1"><Layers size={14} /> 30 Level</span>
+          <span className="w-1 h-1 rounded-full bg-gray-300" />
+          <span className="flex items-center gap-1"><Award size={14} /> Ujian Akhir</span>
+        </div>
+
+        <div className="w-full max-w-sm acco-fade-up" style={{ animationDelay: '0.6s' }}>
+          <button onClick={onStart} className="acco-glow-btn w-full font-extrabold rounded-2xl py-4 px-6 text-base uppercase tracking-wide flex items-center justify-center gap-2 bg-green-500 text-white border-b-4 border-green-700 hover:bg-green-400 transition-all active:scale-95">
+            <Rocket size={20} /> Mulai Belajar Gratis
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================================
+   SCREEN: ONBOARDING ("cara main" — shown once, before choosing a company)
+   ============================================================================================ */
+
+const CYCLE_STEPS = [
+  { icon: FileText, title: 'Jurnal Umum', desc: 'Baca transaksi, lalu tentukan akun mana yang Debit dan mana yang Kredit.', badgeClass: 'bg-blue-100 text-blue-600' },
+  { icon: ListChecks, title: 'Buku Besar', desc: 'Posting semua Debit/Kredit dari Jurnal ke T-Account setiap akun.', badgeClass: 'bg-purple-100 text-purple-600' },
+  { icon: BarChart3, title: 'Neraca Saldo', desc: 'Hitung saldo akhir tiap akun, letakkan di sisi yang lebih besar.', badgeClass: 'bg-orange-100 text-orange-600' },
+  { icon: Award, title: 'Laporan Keuangan', desc: 'Susun Neraca dan Laba Rugi dari Neraca Saldo yang sudah balance.', badgeClass: 'bg-pink-100 text-pink-600' },
+];
+
+function OnboardingScreen({ onBack, onContinue }) {
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center py-10 px-6 overflow-y-auto acco-fade-up">
+      <div className="max-w-2xl w-full">
+        <button onClick={onBack} className="mb-6 flex items-center text-gray-400 hover:text-gray-700 font-bold transition-colors text-sm">
+          <ArrowLeft className="mr-1" size={18} /> Kembali
+        </button>
+
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center justify-center gap-2 bg-blue-100 text-blue-600 px-4 py-2 rounded-full font-bold mb-4 text-sm">
+            <Info size={16} /> Sebelum Mulai
+          </div>
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-800 mb-3">Begini Cara Mainnya</h1>
+          <p className="text-gray-500 font-medium">Setiap level mengikuti 4 tahap yang sama — persis siklus akuntansi asli.</p>
+        </div>
+
+        <div className="space-y-4 mb-10">
+          {CYCLE_STEPS.map((step, i) => {
+            const Icon = step.icon;
+            return (
+              <div key={i} className="bg-white border-2 border-gray-100 rounded-2xl p-4 sm:p-5 flex items-center gap-4 shadow-sm">
+                <div className={`w-12 h-12 rounded-2xl ${step.badgeClass} flex items-center justify-center shrink-0 font-extrabold relative`}>
+                  <Icon size={22} />
+                  <div className="absolute -bottom-1.5 -right-1.5 bg-gray-800 text-white text-[10px] font-extrabold w-5 h-5 rounded-full flex items-center justify-center border-2 border-white">{i + 1}</div>
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-gray-800 text-sm sm:text-base">{step.title}</h3>
+                  <p className="text-gray-500 text-xs sm:text-sm font-medium leading-snug">{step.desc}</p>
+                </div>
+                {i < CYCLE_STEPS.length - 1 && (
+                  <ChevronDown className="ml-auto text-gray-200 hidden sm:block shrink-0" size={20} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
+          <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-4 sm:p-5">
+            <div className="flex items-center gap-2 text-red-600 font-extrabold mb-2 text-sm"><Heart size={18} fill="currentColor" /> Nyawa</div>
+            <p className="text-red-800 text-xs sm:text-sm font-medium leading-relaxed">Setiap jawaban salah mengurangi 1 nyawa. Level dengan lebih banyak transaksi memberimu lebih banyak nyawa. Kehabisan nyawa = level diulang dari awal.</p>
+          </div>
+          <div className="bg-purple-50 border-2 border-purple-200 rounded-2xl p-4 sm:p-5">
+            <div className="flex items-center gap-2 text-purple-600 font-extrabold mb-2 text-sm"><Layers size={18} /> Level Kumulatif</div>
+            <p className="text-purple-800 text-xs sm:text-sm font-medium leading-relaxed">Level 1 cuma 1 transaksi. Level 10 menggabungkan sepuluh transaksi sekaligus — semuanya harus kamu jurnal ulang bersama-sama, seperti kondisi nyata.</p>
+          </div>
+          <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-4 sm:p-5">
+            <div className="flex items-center gap-2 text-orange-600 font-extrabold mb-2 text-sm"><Lightbulb size={18} /> Petunjuk</div>
+            <p className="text-orange-800 text-xs sm:text-sm font-medium leading-relaxed">Salah jawab? Acco langsung kasih petunjuk yang tepat sasaran ke bagian yang keliru — dan kamu bisa minta petunjuk lanjutan yang lebih gamblang.</p>
+          </div>
+          <div className="bg-gray-100 border-2 border-gray-200 rounded-2xl p-4 sm:p-5">
+            <div className="flex items-center gap-2 text-gray-600 font-extrabold mb-2 text-sm"><ShieldAlert size={18} /> Ujian Akhir</div>
+            <p className="text-gray-700 text-xs sm:text-sm font-medium leading-relaxed">Selesaikan 10 level untuk membuka Ujian Akhir. Gagal ujian = cooldown 3 menit sebelum boleh coba lagi.</p>
+          </div>
+        </div>
+
+        <Button onClick={onContinue} variant="primary" className="w-full shadow-lg shadow-green-100">
+          Lanjut Pilih Perusahaan <ArrowRight size={20} />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================================
+   SCREEN: PILIH KATEGORI PERUSAHAAN
+   ============================================================================================ */
+
+function CategoryScreen({ onBack, onSelect }) {
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center py-10 px-6 overflow-y-auto">
+      <div className="max-w-4xl w-full mx-auto text-center relative z-10 pt-4">
+        <button onClick={onBack} className="mb-6 flex items-center text-gray-400 hover:text-gray-700 font-bold transition-colors text-sm mx-auto sm:mx-0 sm:self-start">
+          <ArrowLeft className="mr-1" size={18} /> Kembali
+        </button>
+        <div className="inline-flex items-center justify-center gap-2 bg-yellow-100 text-yellow-700 px-4 py-2 rounded-full font-bold mb-6">
+          <Sparkles size={18} /> Dunia Akuntansi Terbuka!
+        </div>
+        <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-800 mb-4">Pilih Jalur Karirmu</h2>
+        <p className="text-gray-500 font-medium mb-8">Pilih jenis perusahaan yang ingin kamu kuasai. Mulailah dari Perusahaan Jasa jika kamu pemula.</p>
+
+        <div className="flex justify-center mb-8 animate-bounce text-gray-400">
+          <ArrowDown size={32} />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {CATEGORY_META.map((cat) => {
+            const CatIcon = cat.icon;
+            return (
+              <button
+                key={cat.id}
+                onClick={() => onSelect(cat.id)}
+                className={`relative group bg-white p-6 rounded-3xl border-4 ${cat.borderClass} hover:-translate-y-2 hover:shadow-xl transition-all duration-300 text-left overflow-hidden`}
+              >
+                <div className={`absolute top-0 right-0 w-32 h-32 ${cat.bgClass} rounded-full -mr-16 -mt-16 transition-transform group-hover:scale-150 opacity-50`}></div>
+                <div className={`w-16 h-16 ${cat.colorClass} rounded-2xl flex items-center justify-center mb-6 shadow-md relative z-10`}>
+                  <CatIcon size={32} color="white" />
+                </div>
+                <h3 className="text-2xl font-extrabold text-gray-800 mb-2 relative z-10">{cat.title}</h3>
+                <p className="text-gray-500 font-medium leading-relaxed relative z-10">{cat.desc}</p>
+                <div className="mt-6 flex items-center font-bold text-sm uppercase tracking-wider relative z-10">
+                  <span className={cat.textClass}>Mainkan 10 Level</span>
+                  <ChevronRight size={18} className={`ml-1 ${cat.textClass} group-hover:translate-x-1 transition-transform`} />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================================
+   SCREEN: PETA LEVEL
+   ============================================================================================ */
+
+function LevelMapScreen({ categoryMeta, completedLevels, examCooldownEnd, currentTime, onBack, onPlayLevel, onPlayExam }) {
+  const Icon = categoryMeta.icon;
+  const levels = Array.from({ length: 10 }, (_, i) => i + 1);
+  const isAllLevelsCompleted = levels.every((n) => completedLevels[`${categoryMeta.id}-${n}`]);
+  const isExamCompleted = completedLevels[`${categoryMeta.id}-exam`];
+  const isLocked = !isAllLevelsCompleted && !isExamCompleted;
+  const isCoolingDown = examCooldownEnd > currentTime;
+  const remainingMs = examCooldownEnd - currentTime;
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center p-6 overflow-y-auto">
+      <div className="w-full max-w-2xl my-4">
+        <button onClick={onBack} className="mb-6 flex items-center text-gray-500 hover:text-gray-800 font-bold transition-colors">
+          <ChevronRight className="rotate-180 mr-1" size={20} /> Kembali ke Peta Dunia
+        </button>
+
+        <div className={`bg-white p-6 rounded-3xl border-2 ${categoryMeta.borderClass} mb-8 flex items-center gap-5 shadow-sm`}>
+          <div className={`w-16 h-16 ${categoryMeta.colorClass} rounded-2xl flex items-center justify-center shrink-0`}>
+            <Icon size={32} color="white" />
+          </div>
+          <div>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-800">{categoryMeta.title}</h2>
+            <p className="text-gray-500 font-medium mt-1">{categoryMeta.desc}</p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          {levels.map((n) => {
+            const id = `${categoryMeta.id}-${n}`;
+            const isCompleted = completedLevels[id];
+            const txTitle = categoryMeta.bank[n - 1].title;
+            return (
+              <button
+                key={id}
+                onClick={() => onPlayLevel(n)}
+                className="w-full bg-white p-5 border-2 border-gray-200 rounded-2xl flex items-center hover:bg-gray-50 hover:border-gray-400 hover:shadow-md transition-all text-left group relative"
+              >
+                {isCompleted && (
+                  <div className="absolute -top-3 -right-2 bg-green-500 text-white rounded-full p-1 border-2 border-white shadow-sm z-10" title="Selesai!">
+                    <CheckCircle2 size={20} />
+                  </div>
+                )}
+                <div className="relative mr-5">
+                  <div className="bg-gray-100 p-4 rounded-full transition-colors shrink-0 flex items-center justify-center">
+                    <TrendingUp className={categoryMeta.textClass} size={28} />
+                  </div>
+                  <div className="absolute -bottom-2 -right-2 bg-gray-800 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center border-2 border-white">
+                    {n}
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-extrabold text-lg text-gray-800 mb-1">Level {n}: {txTitle}</h3>
+                  <p className="text-sm text-gray-500 font-medium leading-snug">
+                    {n === 1 ? 'Transaksi pertamamu.' : `${n} transaksi kumulatif — semua harus dijurnal ulang.`}
+                  </p>
+                </div>
+                <div className="ml-auto pl-4 text-gray-300 group-hover:text-gray-500 transition-colors hidden sm:block">
+                  <ArrowRight size={24} />
+                </div>
+              </button>
+            );
+          })}
+
+          <div className="mt-8 pt-8 border-t-4 border-dashed border-gray-200 relative">
+            <div className="text-center mb-4 text-red-500 font-extrabold flex items-center justify-center gap-2 animate-pulse">
+              <ShieldAlert /> BOSS EXAM: UJIAN AKHIR
+            </div>
+            <button
+              disabled={isCoolingDown || isLocked}
+              onClick={onPlayExam}
+              className={`w-full p-6 rounded-3xl flex flex-col items-center justify-center text-center transition-all relative ${
+                isLocked
+                  ? 'bg-gray-200 border-4 border-gray-300 text-gray-500 cursor-not-allowed opacity-90'
+                  : isCoolingDown
+                  ? 'bg-gray-100 border-4 border-gray-300 text-gray-400 cursor-not-allowed opacity-80'
+                  : isExamCompleted
+                  ? 'bg-green-500 hover:bg-green-400 border-4 border-green-600 text-white shadow-[0_8px_0_rgb(22,163,74)] hover:shadow-[0_4px_0_rgb(22,163,74)] hover:translate-y-[4px]'
+                  : 'bg-red-500 hover:bg-red-400 border-4 border-red-600 shadow-[0_8px_0_rgb(220,38,38)] hover:shadow-[0_4px_0_rgb(220,38,38)] hover:translate-y-[4px] text-white'
+              }`}
+            >
+              {isExamCompleted && (
+                <div className="absolute -top-3 -right-3 bg-yellow-400 text-yellow-900 rounded-full p-2 border-4 border-white shadow-md z-10" title="Ujian Lulus!">
+                  <Sparkles size={24} />
+                </div>
+              )}
+              <div className="bg-white/20 p-4 rounded-full mb-3">
+                {isLocked ? <ShieldAlert size={40} className="text-gray-400" /> : isCoolingDown ? <Clock size={40} className="text-gray-400" /> : <TrendingUp size={40} className="text-white" />}
+              </div>
+              <h3 className="font-extrabold text-2xl mb-2">UJIAN AKHIR: {categoryMeta.title.toUpperCase()}</h3>
+              <p className={`font-medium mb-4 ${isLocked || isCoolingDown ? 'text-gray-500' : 'text-white/90'}`}>
+                {isLocked
+                  ? 'Selesaikan semua 10 Level di atas untuk membuka Ujian ini!'
+                  : isCoolingDown
+                  ? 'Cooldown aktif, pelajari materi lagi!'
+                  : `${categoryMeta.examBank.length} transaksi baru, ${EXAM_HEARTS} nyawa. Gagal = cooldown 3 menit.`}
+              </p>
+              {!isLocked && isCoolingDown && (
+                <div className="bg-gray-300 text-gray-700 px-6 py-2 rounded-full font-bold text-lg flex items-center gap-2">
+                  <Clock size={18} /> Coba lagi dalam: {fmtCountdown(remainingMs)}
+                </div>
+              )}
+              {!isLocked && !isCoolingDown && (
+                <div className={`px-6 py-2 rounded-full font-bold text-sm uppercase tracking-widest flex items-center gap-2 ${isExamCompleted ? 'bg-green-700 text-white' : 'bg-red-700 text-white'}`}>
+                  {isExamCompleted ? <span className="flex gap-2 items-center"><CheckCircle2 size={16} /> LULUS</span> : <span className="flex gap-2 items-center"><Heart fill="white" size={16} /> {EXAM_HEARTS} Nyawa Saja</span>}
+                </div>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================================
+   MAIN APP
+   ============================================================================================ */
+
+function Accolingo() {
+  const [screen, setScreen] = useState('intro');
+  // intro, onboarding, category, level, journal, ledger, trialBalance, finStat, success, examFailed
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [hearts, setHearts] = useState(5);
+  const [progress, setProgress] = useState(0);
+  const [activeLevelNumber, setActiveLevelNumber] = useState(null);
+  const [isExamMode, setIsExamMode] = useState(false);
+  const [examCooldowns, setExamCooldowns] = useState({});
+  const [currentTime, setCurrentTime] = useState(Date.now());
+  const [completedLevels, setCompletedLevels] = useState({});
+  const [recapOpen, setRecapOpen] = useState(false);
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const categoryMeta = CATEGORY_META.find((c) => c.id === selectedCategory);
+
+  // Safety net: if a screen that requires a chosen company is reached without one
+  // (shouldn't happen through normal navigation), bounce back to category selection.
+  useEffect(() => {
+    const needsCategory = ['level', 'journal', 'ledger', 'trialBalance', 'finStat'].includes(screen);
+    if (needsCategory && !categoryMeta) setScreen('category');
+  }, [screen, categoryMeta]);
+
+  const builtLevel = useMemo(() => {
+    if (!categoryMeta) return null;
+    if (isExamMode) return buildLevel(categoryMeta.examBank, categoryMeta.examBank.length);
+    if (!activeLevelNumber) return null;
+    return buildLevel(categoryMeta.bank, activeLevelNumber);
+  }, [categoryMeta, activeLevelNumber, isExamMode]);
+
+  const activeLevelId = categoryMeta ? (isExamMode ? `${categoryMeta.id}-exam` : `${categoryMeta.id}-${activeLevelNumber}`) : null;
+
+  const goToLevelMap = () => { setIsExamMode(false); setScreen('level'); };
+
+  const playLevel = (n) => {
+    setIsExamMode(false);
+    setActiveLevelNumber(n);
+    setProgress(0);
+    setHearts(heartsForLevel(n));
+    setScreen('journal');
+  };
+
+  const playExam = () => {
+    setIsExamMode(true);
+    setActiveLevelNumber(null);
+    setProgress(0);
+    setHearts(EXAM_HEARTS);
+    setScreen('journal');
+  };
+
+  const handleFail = () => {
+    if (isExamMode) {
+      setExamCooldowns((prev) => ({ ...prev, [categoryMeta.id]: Date.now() + EXAM_COOLDOWN_MS }));
+      setScreen('examFailed');
+    } else {
+      setScreen('level');
+    }
+  };
+
+  const advancePhase = (nextProgress, nextScreen) => { setProgress(nextProgress); setRecapOpen(false); setScreen(nextScreen); };
+
+  const finishLevel = () => {
+    setProgress(100);
+    setCompletedLevels((prev) => ({ ...prev, [activeLevelId]: true }));
+    setRecapOpen(false);
+    setScreen('success');
+  };
+
+  if (screen === 'intro') {
+    return <IntroScreen onStart={() => setScreen('onboarding')} />;
+  }
+
+  if (screen === 'onboarding') {
+    return <OnboardingScreen onBack={() => setScreen('intro')} onContinue={() => setScreen('category')} />;
+  }
+
+  if (screen === 'category') {
+    return <CategoryScreen onBack={() => setScreen('onboarding')} onSelect={(id) => { setSelectedCategory(id); setScreen('level'); }} />;
+  }
+
+  if (screen === 'level') {
+    if (!categoryMeta) return null;
+    const cooldownEnd = examCooldowns[categoryMeta.id] || 0;
+    return (
+      <LevelMapScreen
+        categoryMeta={categoryMeta}
+        completedLevels={completedLevels}
+        examCooldownEnd={cooldownEnd}
+        currentTime={currentTime}
+        onBack={() => setScreen('category')}
+        onPlayLevel={playLevel}
+        onPlayExam={playExam}
+      />
+    );
+  }
+
+  if (screen === 'examFailed') {
+    return (
+      <div className="min-h-screen bg-red-500 flex flex-col items-center justify-center p-6 animate-in zoom-in duration-500">
+        <div className="bg-white p-8 rounded-3xl shadow-2xl text-center max-w-md w-full border-4 border-red-600">
+          <div className="mx-auto w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mb-6 animate-bounce">
+            <ShieldAlert size={64} className="text-red-500" />
+          </div>
+          <h1 className="text-3xl font-extrabold text-gray-800 mb-2">UJIAN GAGAL!</h1>
+          <p className="text-gray-600 mb-8 text-lg font-medium">
+            Pengetahuan akuntansimu belum cukup kuat untuk menaklukkan ujian ini. Ujian ini terkunci selama <strong>3 menit</strong>. Pelajari lagi materinya, lalu coba lagi!
+          </p>
+          <Button onClick={goToLevelMap} variant="outline">KEMBALI KE PETA LEVEL</Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (screen === 'success') {
+    return (
+      <div className={`min-h-screen ${isExamMode ? 'bg-yellow-500' : 'bg-green-500'} flex flex-col items-center justify-center p-6 animate-in zoom-in duration-500`}>
+        <div className="bg-white p-8 rounded-3xl shadow-2xl text-center max-w-md w-full">
+          <div className={`mx-auto w-24 h-24 ${isExamMode ? 'bg-yellow-100' : 'bg-green-100'} rounded-full flex items-center justify-center mb-6`}>
+            {isExamMode ? <Award size={64} className="text-yellow-500" /> : <CheckCircle2 size={64} className="text-green-500" />}
+          </div>
+          <h1 className="text-3xl font-extrabold text-gray-800 mb-2">{isExamMode ? 'Ujian Lulus!' : 'Luar Biasa!'}</h1>
+          <p className="text-gray-600 mb-8 text-lg font-medium">
+            {isExamMode
+              ? `Kamu resmi menaklukkan siklus akuntansi ${categoryMeta?.title}! Dari Jurnal Umum sampai Laporan Keuangan, semua benar.`
+              : `Kamu berhasil menyelesaikan satu siklus penuh untuk kasus ini. Kamu berbakat jadi Akuntan!`}
+          </p>
+          <Button onClick={goToLevelMap} variant="primary">KEMBALI KE PETA LEVEL</Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!categoryMeta || !builtLevel) return null;
+
+  const phaseIdx = PHASE_ORDER.indexOf(screen);
+  const levelLabel = isExamMode ? `Ujian Akhir — ${categoryMeta.title}` : `Level ${activeLevelNumber} — ${categoryMeta.title}`;
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col h-screen overflow-hidden">
+      <div className="pt-5 px-6 pb-1 max-w-4xl mx-auto w-full shrink-0 bg-gray-50 z-10">
+        <div className="flex items-center justify-between text-xs font-bold text-gray-400 mb-1.5">
+          <span>{levelLabel}</span>
+          <span>{builtLevel.n} transaksi</span>
+        </div>
+        <div className="flex items-center gap-6">
+          <div className="flex-1 bg-gray-200 rounded-full h-4 relative overflow-hidden">
+            <div className="bg-green-500 h-full rounded-full transition-all duration-500 ease-out" style={{ width: `${progress}%` }} />
+          </div>
+          <div className="flex items-center text-red-500 font-extrabold text-xl">
+            <Heart fill="currentColor" className="mr-1.5" size={22} /> {hearts}
+          </div>
+        </div>
+      </div>
+
+      {phaseIdx >= 0 && (
+        <div className="px-4 sm:px-6 pt-3 pb-2 max-w-4xl mx-auto w-full shrink-0 z-10 bg-gray-50">
+          <div className="bg-blue-50 border-2 border-blue-200 p-3 md:p-4 rounded-2xl flex gap-3 shadow-sm items-center">
+            <img src="https://api.dicebear.com/7.x/bottts/svg?seed=AccoMaster" alt="Mascot" className="w-10 h-10 bg-white rounded-full border-2 border-blue-200 p-1 hidden sm:block shrink-0" />
+            {phaseIdx === 0 ? (
+              <p className="text-gray-800 text-sm sm:text-base font-semibold leading-relaxed">
+                Kamu akan mencatat <strong>{builtLevel.n} transaksi</strong> di bawah ini. Kerjakan satu per satu, lalu cek jawabanmu.
+              </p>
+            ) : (
+              <p className="text-gray-800 text-sm sm:text-base font-semibold leading-relaxed">
+                Masih berdasarkan {builtLevel.n} transaksi yang sama. Lupa isinya? Buka rekap di kanan atas tahap ini.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {screen === 'journal' && (
+        <PhaseJournal builtLevel={builtLevel} hearts={hearts} setHearts={setHearts} onFail={handleFail}
+          onNext={() => advancePhase(25, 'ledger')} onOpenRecap={() => setRecapOpen(true)} />
+      )}
+      {screen === 'ledger' && (
+        <PhaseLedger builtLevel={builtLevel} hearts={hearts} setHearts={setHearts} onFail={handleFail}
+          onNext={() => advancePhase(50, 'trialBalance')} onOpenRecap={() => setRecapOpen(true)} />
+      )}
+      {screen === 'trialBalance' && (
+        <PhaseTrialBalance builtLevel={builtLevel} hearts={hearts} setHearts={setHearts} onFail={handleFail}
+          onNext={() => advancePhase(75, 'finStat')} onOpenRecap={() => setRecapOpen(true)} />
+      )}
+      {screen === 'finStat' && (
+        <PhaseFinancialStatement builtLevel={builtLevel} hearts={hearts} setHearts={setHearts} onFail={handleFail}
+          onNext={finishLevel} onOpenRecap={() => setRecapOpen(true)} />
+      )}
+
+      <RecapPanel open={recapOpen} onClose={() => setRecapOpen(false)} builtLevel={builtLevel} phase={screen} />
+
+      <style>{`
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(-5px); }
+          50% { transform: translateX(5px); }
+          75% { transform: translateX(-5px); }
+        }
+        .animate-shake { animation: shake 0.5s ease-in-out; }
+
+        @keyframes acco-float-kf {
+          0%, 100% { transform: translateY(0) rotate(0deg); }
+          50% { transform: translateY(-18px) rotate(8deg); }
+        }
+        .acco-float { animation: acco-float-kf 4.5s ease-in-out infinite; }
+
+        @keyframes acco-bounce-in-kf {
+          0% { transform: scale(0.4) rotate(-8deg); opacity: 0; }
+          60% { transform: scale(1.08) rotate(-3deg); opacity: 1; }
+          100% { transform: scale(1) rotate(-3deg); opacity: 1; }
+        }
+        .acco-bounce-in { animation: acco-bounce-in-kf 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+        @keyframes acco-fade-up-kf {
+          0% { transform: translateY(14px); opacity: 0; }
+          100% { transform: translateY(0); opacity: 1; }
+        }
+        .acco-fade-up { animation: acco-fade-up-kf 0.6s ease-out both; }
+
+        @keyframes acco-blob-kf {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          33% { transform: translate(30px, -20px) scale(1.08); }
+          66% { transform: translate(-20px, 15px) scale(0.95); }
+        }
+        .acco-blob { position: absolute; border-radius: 9999px; filter: blur(50px); opacity: 0.45; animation: acco-blob-kf 12s ease-in-out infinite; pointer-events: none; }
+        .acco-blob-1 { width: 280px; height: 280px; background: #86efac; top: -60px; left: -60px; }
+        .acco-blob-2 { width: 320px; height: 320px; background: #93c5fd; bottom: -80px; right: -80px; animation-delay: -4s; }
+        .acco-blob-3 { width: 220px; height: 220px; background: #fde68a; top: 40%; right: 10%; animation-delay: -8s; }
+
+        @keyframes acco-glow-kf {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.45); }
+          50% { box-shadow: 0 0 0 14px rgba(34, 197, 94, 0); }
+        }
+        .acco-glow-btn { animation: acco-glow-kf 2.2s ease-out infinite; }
+      `}</style>
+    </div>
+  );
+}
+
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<Accolingo />);
+</script>
+</body>
+</html>
